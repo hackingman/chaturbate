@@ -1,3 +1,5 @@
+[![Codacy Badge](https://api.codacy.com/project/badge/grade/33a18d5c205d436487e245f4c1a44650)](https://www.codacy.com/app/falsovsky/chaturbate)
+
 # Chaturbate
 
 Chaturbate (great original name) is a python script to automate the recording of cam shows in Chaturbate.
