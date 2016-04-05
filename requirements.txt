@@ -1,0 +1,4 @@
+Chaturbate
+beautifulsoup4>=4.3.2
+hurry.filesize>=0.9
+requests>=2.4.3
