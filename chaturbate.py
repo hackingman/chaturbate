@@ -10,6 +10,7 @@ The requirements are:
     RTMPDump-ksv - https://github.com/BurntSushi/rtmpdump-ksv
     BeautifulSoup - https://www.crummy.com/software/BeautifulSoup/
     requests - http://docs.python-requests.org/en/master/
+    hurry.filesize - https://pypi.python.org/pypi/hurry.filesize/
 """
 
 import subprocess
@@ -20,8 +21,10 @@ import ConfigParser
 import os
 import sys
 import signal
-from datetime import datetime
+from datetime import datetime, timedelta
+import logging
 import requests
+from hurry.filesize import size
 from bs4 import BeautifulSoup
 
 
@@ -39,19 +42,14 @@ class Chaturbate(object):
         Instantiates the class.
         Reads username and password from config.ini
         """
+        logging.basicConfig(level=logging.INFO,
+                            format='%(asctime)s %(levelname)s %(message)s',
+                            propagate=False)
         config_parser = ConfigParser.ConfigParser()
         config_parser.read("config.ini")
         self.username = config_parser.get('User', 'username')
         self.password = config_parser.get('User', 'password')
         self.req = requests.Session()
-
-    @staticmethod
-    def debug(message):
-        """
-        Prints a log message
-        """
-        date_time = datetime.now()
-        print "[" + date_time.strftime("%Y-%m-%dT%H%M%S") + "] " + message
 
     @staticmethod
     def is_logged(html):
@@ -64,6 +62,28 @@ class Chaturbate(object):
             return False
         return True
 
+    @staticmethod
+    def run_rtmpdump(info, output):
+        """
+        Starts an rtmpdump with information given to the ouput file
+        """
+        args = [
+            "rtmpdump",
+            "--quiet",
+            "--live",
+            "--rtmp", "rtmp://" + info[2] + "/live-edge",
+            "--pageUrl", "http://chaturbate.com/" + info[1],
+            "--conn", "S:" + info[8],
+            "--conn", "S:" + info[1],
+            "--conn", "S:2.645",
+            "--conn", "S:" + urllib.unquote(info[15]),
+            "--token", "m9z#$dO0qe34Rxe@sMYxx",
+            "--playpath", "playpath",
+            "--flv", output
+        ]
+
+        return subprocess.Popen(args)
+
     def make_request(self, url):
         """
         Does a GET request, and login if required
@@ -71,7 +91,7 @@ class Chaturbate(object):
         result = self.req.get(url)
 
         while self.is_logged(result.text) is False:
-            self.debug("[ERR]: Not logged in")
+            logging.warning("Not logged in")
             self.login()
             result = self.req.get(url)
 
@@ -81,7 +101,6 @@ class Chaturbate(object):
         """
         Return a list of your online followed models
         """
-        self.debug("Getting models list...")
 
         url = 'https://chaturbate.com/followed-cams/'
         html = self.make_request(url)
@@ -104,20 +123,13 @@ class Chaturbate(object):
 
             models.append(name)
 
-        if len(models) == 0:
-            self.debug("No online models found")
-
         return models
 
     def is_recording(self, model):
         """
         Checks if a model is already being recorded
         """
-        # TODO: PRETIFY
-        for proc in self.processes:
-            if proc['model'] == model:
-                return True
-        return False
+        return model in [proc['model'] for proc in self.processes]
 
     def process_models(self, models):
         """
@@ -125,28 +137,29 @@ class Chaturbate(object):
         and starts capturing them
         """
         for model in models:
-            self.debug("Model " + model + " is chaturbating")
+            # already recording it, ignore
             if self.is_recording(model) is True:
-                self.debug("Already recording")
                 continue
+            logging.info("Model " + model + " is chaturbating")
             info = self.get_model_info(model)
             if len(info) > 0:
-                self.capture(info)
+                if self.is_private(info) is False:
+                    self.capture(info)
+                else:
+                    logging.warning("But the show is private")
 
     def get_model_info(self, name):
         """
         Returns a list with all EmbedViewerSwf variables from the model
         """
-        self.debug("Getting " + name + " info...")
         url = "https://chaturbate.com/" + name + "/"
-
         html = self.make_request(url)
 
         info = []
 
         embed = re.search(r"EmbedViewerSwf\(*(.+?)\);", html, re.DOTALL)
         if embed is None:
-            self.debug('Cant find embed')
+            logging.warning('Cant find embed')
             return info
 
         for line in embed.group(1).split("\n"):
@@ -163,25 +176,17 @@ class Chaturbate(object):
         date_time = datetime.now()
         filename = "Chaturbate_" + info[1] + date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv"
 
-        self.debug("Capturing " + filename)
+        logging.info("Capturing " + filename)
 
-        args = [
-            "rtmpdump",
-            "--quiet",
-            "--live",
-            "--rtmp", "rtmp://" + info[2] + "/live-edge",
-            "--pageUrl", "http://chaturbate.com/" + info[1],
-            "--conn", "S:" + info[8],
-            "--conn", "S:" + info[1],
-            "--conn", "S:2.645",
-            "--conn", "S:" + urllib.unquote(info[15]),
-            "--token", "m9z#$dO0qe34Rxe@sMYxx",
-            "--playpath", "playpath",
-            "--flv", filename
-        ]
+        proc = self.run_rtmpdump(info, filename)
 
-        proc = subprocess.Popen(args)
-        self.processes.append({'model': info[1], 'proc': proc, 'filename': filename})
+        self.processes.append(
+            {
+                'model': info[1],
+                'filename': filename,
+                'time': int(time.time()),
+                'proc': proc,
+            })
 
     def check_running(self):
         """
@@ -191,9 +196,9 @@ class Chaturbate(object):
 
         for proc in self.processes:
             if proc['proc'].poll() is not None:
-                self.debug(proc['model'] + " is no longer being captured")
+                logging.info(proc['model'] + " is no longer being captured")
                 if os.path.getsize(proc['filename']) == 0:
-                    self.debug("Capture size is 0, deleting")
+                    logging.warning("Capture size is 0kb, deleting. Show probably is private")
                     os.remove(proc['filename'])
                 remove.append(proc['model'])
 
@@ -213,7 +218,7 @@ class Chaturbate(object):
         """
         Performs the login on the site
         """
-        self.debug("Logging in...")
+        logging.info("Logging in...")
         url = 'https://chaturbate.com/auth/login/'
         result = self.req.get(url)
 
@@ -230,19 +235,62 @@ class Chaturbate(object):
                                headers={'Referer': url})
 
         if self.is_logged(result.text) is False:
-            self.debug("[ERR]: Could not login")
+            logging.warning("Could not login")
             return False
         else:
-            self.debug("[OK]: Logged in")
             return True
+
+    def do_cycle(self):
+        """
+        Do a full cycle
+        """
+        c.check_running()
+        online_models = self.get_online_models()
+        if len(online_models) > 0:
+            self.process_models(online_models)
+        self.print_recording()
+
+    def print_recording(self):
+        """
+        Print statistics about cams being recorded
+        """
+        for proc in self.processes:
+            if os.path.isfile(proc['filename']):
+                file_size = os.path.getsize(proc['filename'])
+                if file_size > 0:
+                    started_at = time.strftime("%D %H:%M", time.localtime(proc['time']))
+                    recording_time = str(timedelta(seconds=int(time.time()) - proc['time']))
+                    formatted_file_size = size(file_size)
+                    logging.info("Recording: " + proc['model'] + " - " +
+                                 "Started at " + started_at + " | " +
+                                 "Size: " + formatted_file_size + " | " +
+                                 "Duration: " + recording_time)
+
+    def is_private(self, info):
+        """
+        Tries to check if a stream is private.
+        Runs rtmpdump for 10 seconds and checks if it recorded anything
+        """
+        result = True
+
+        file_name = "test.flv"
+        proc = self.run_rtmpdump(info, file_name)
+        time.sleep(10)
+        if os.path.isfile(file_name):
+            if os.path.getsize(file_name) > 0:
+                result = False
+
+        proc.terminate()
+        os.remove(file_name)
+
+        return result
 
 if __name__ == "__main__":
     c = Chaturbate()
     while True:
         try:
-            c.process_models(c.get_online_models())
+            c.do_cycle()
             time.sleep(60)
-            c.check_running()
         except KeyboardInterrupt:
             c.kill_processes()
             sys.exit()
