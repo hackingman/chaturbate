@@ -12,14 +12,15 @@ class Chaturbate:
     req = None
     processes = []
 
+    @staticmethod
+    def debug(message):
+        dt = datetime.now()
+        print "[" + dt.strftime("%Y-%m-%dT%H%M%S") + "] " + message
+
     def __init__(self, username, password):
         self.username = username
         self.password = password
         self.req = requests.Session()
-
-    def debug(self, message):
-        dt = datetime.now()
-        print "[" + dt.strftime("%Y-%m-%dT%H%M%S") + "] " + message
 
     def getModels(self):
         self.debug("Getting models list...")
@@ -80,8 +81,6 @@ class Chaturbate:
             self.login()
             r = self.req.get(url)
 
-        s = BeautifulSoup(r.text, "html.parser")
-
         info = []
 
         embed = re.search(r"EmbedViewerSwf\(*(.+?)\);", r.text, re.DOTALL)
@@ -99,7 +98,7 @@ class Chaturbate:
 
     def capture(self, info):
         dt = datetime.now()
-        filename = "Chaturbate" + dt.strftime("_%Y-%m-%dT%H%M%S_") + info[1] + ".flv"
+        filename = "Chaturbate_" +  info[1] + dt.strftime("_%Y-%m-%dT%H%M%S") +".flv"
 
         self.debug("Capturing " + filename)
 
