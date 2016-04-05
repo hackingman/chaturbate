@@ -1,93 +1,153 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from bs4 import BeautifulSoup
-import requests, subprocess, re, urllib, time, ConfigParser
-import os, sys, signal
+
+"""
+This example module automatically records shows from your followed models
+using rtmpdump.
+
+The requirements are:
+    RTMPDump-ksv - https://github.com/BurntSushi/rtmpdump-ksv
+    BeautifulSoup - https://www.crummy.com/software/BeautifulSoup/
+    requests - http://docs.python-requests.org/en/master/
+"""
+
+import subprocess
+import re
+import urllib
+import time
+import ConfigParser
+import os
+import sys
+import signal
 from datetime import datetime
+import requests
+from bs4 import BeautifulSoup
+
 
 class Chaturbate(object):
+    """
+    All-in-one class to record chaturbate streams
+    """
     username = ''
     password = ''
     req = None
     processes = []
 
-    @staticmethod
-    def debug(message):
-        dt = datetime.now()
-        print "[" + dt.strftime("%Y-%m-%dT%H%M%S") + "] " + message
-
-    def __init__(self, username, password):
-        self.username = username
-        self.password = password
+    def __init__(self):
+        """
+        Instantiates the class.
+        Reads username and password from config.ini
+        """
+        config_parser = ConfigParser.ConfigParser()
+        config_parser.read("config.ini")
+        self.username = config_parser.get('User', 'username')
+        self.password = config_parser.get('User', 'password')
         self.req = requests.Session()
 
-    def getModels(self):
+    @staticmethod
+    def debug(message):
+        """
+        Prints a log message
+        """
+        date_time = datetime.now()
+        print "[" + date_time.strftime("%Y-%m-%dT%H%M%S") + "] " + message
+
+    @staticmethod
+    def is_logged(html):
+        """
+        Checks if youre currently logged in
+        """
+        soup = BeautifulSoup(html, "html.parser")
+
+        if soup.find('div', {'id': 'user_information'}) is None:
+            return False
+        return True
+
+    def make_request(self, url):
+        """
+        Does a GET request, and login if required
+        """
+        result = self.req.get(url)
+
+        while self.is_logged(result.text) is False:
+            self.debug("[ERR]: Not logged in")
+            self.login()
+            result = self.req.get(url)
+
+        return result.text
+
+    def get_online_models(self):
+        """
+        Return a list of your online followed models
+        """
         self.debug("Getting models list...")
 
         url = 'https://chaturbate.com/followed-cams/'
-        r = self.req.get(url)
-
-        while (self.isLogged(html=r.text) == False):
-            self.debug("[ERR]: Not logged in")
-            self.login()
-            r = self.req.get(url)
-
-        s = BeautifulSoup(r.text, "html.parser")
+        html = self.make_request(url)
+        soup = BeautifulSoup(html, "html.parser")
 
         models = []
-        modelsLi = s.find('ul', {'class': 'list'}).findAll('li', recursive=False)
-        for model in modelsLi:
-            m = {}
-            m['name'] = model.find('a')['href'].replace('/','')
+        models_li = soup.find('ul', {'class': 'list'}).findAll('li', recursive=False)
 
-            if (model.find('div', {'class': 'thumbnail_label_c_private_show'})):
-                self.debug(m['name'] + " is in a private show, ignoring...")
+        for model in models_li:
+            name = model.find('a')['href'].replace('/', '')
+
+            # private show
+            if model.find('div', {'class': 'thumbnail_label_c_private_show'}):
                 continue
 
-            m['status'] = model.find('div', {'class': 'thumbnail_label'}).text
-            models.append(m)
+            # offline
+            status = model.find('div', {'class': 'thumbnail_label'}).text
+            if status == "OFFLINE":
+                continue
 
-        if (len(models) == 0):
-            self.debug("No Online models found")
+            models.append(name)
+
+        if len(models) == 0:
+            self.debug("No online models found")
 
         return models
 
-    def isRecording(self, model):
+    def is_recording(self, model):
+        """
+        Checks if a model is already being recorded
+        """
+        # TODO: PRETIFY
         for proc in self.processes:
             if proc['model'] == model:
                 return True
         return False
 
-
-    def processModels(self, models):
+    def process_models(self, models):
+        """
+        Processes a list that has the online models
+        and starts capturing them
+        """
         for model in models:
-            if (model['status'] != 'OFFLINE'):
-                self.debug("Model " + model['name'] + " is chaturbating")
-                if (self.isRecording(model['name']) == True):
-                    self.debug("Already recording")
-                    continue
-                info = self.getModelInfo(model['name'])
-                if (len(info)>0):
-                    self.capture(info)
+            self.debug("Model " + model + " is chaturbating")
+            if self.is_recording(model) is True:
+                self.debug("Already recording")
+                continue
+            info = self.get_model_info(model)
+            if len(info) > 0:
+                self.capture(info)
 
-    def getModelInfo(self, name):
+    def get_model_info(self, name):
+        """
+        Returns a list with all EmbedViewerSwf variables from the model
+        """
         self.debug("Getting " + name + " info...")
         url = "https://chaturbate.com/" + name + "/"
-        r = self.req.get(url)
 
-        while (self.isLogged(html=r.text) == False):
-            self.debug("[ERR]: Not logged in")
-            self.login()
-            r = self.req.get(url)
+        html = self.make_request(url)
 
         info = []
 
-        embed = re.search(r"EmbedViewerSwf\(*(.+?)\);", r.text, re.DOTALL)
-        if embed == None:
+        embed = re.search(r"EmbedViewerSwf\(*(.+?)\);", html, re.DOTALL)
+        if embed is None:
             self.debug('Cant find embed')
             return info
-            #raise Exception('Cant find Model Info')
 
         for line in embed.group(1).split("\n"):
             data = re.search(""" +["'](.*)?["'],""", line)
@@ -97,8 +157,11 @@ class Chaturbate(object):
         return info
 
     def capture(self, info):
-        dt = datetime.now()
-        filename = "Chaturbate_" +  info[1] + dt.strftime("_%Y-%m-%dT%H%M%S") +".flv"
+        """
+        Starts capturing the stream with rtmpdump
+        """
+        date_time = datetime.now()
+        filename = "Chaturbate_" + info[1] + date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv"
 
         self.debug("Capturing " + filename)
 
@@ -120,13 +183,16 @@ class Chaturbate(object):
         proc = subprocess.Popen(args)
         self.processes.append({'model': info[1], 'proc': proc, 'filename': filename})
 
-    def checkRunning(self):
+    def check_running(self):
+        """
+        Checks if the rtmpdump processes are still running
+        """
         remove = []
 
         for proc in self.processes:
-            if (proc['proc'].poll() != None):
+            if proc['proc'].poll() is not None:
                 self.debug(proc['model'] + " is no longer being captured")
-                if (os.path.getsize(proc['filename']) == 0):
+                if os.path.getsize(proc['filename']) == 0:
                     self.debug("Capture size is 0, deleting")
                     os.remove(proc['filename'])
                 remove.append(proc['model'])
@@ -136,37 +202,34 @@ class Chaturbate(object):
             procs = [f for f in procs if f['model'] != item]
         self.processes = procs
 
-    def killProcesses(self):
+    def kill_processes(self):
+        """
+        Kills all child processes, used when ^C
+        """
         for proc in self.processes:
             os.kill(proc['proc'].pid, signal.SIGTERM)
 
-    def isLogged(self, url=None, html=None):
-        if (url != None):
-            r = self.req.get(url)
-            text = r.text
-        if (html != None):
-            text = html
-
-        s = BeautifulSoup(text, "html.parser")
-
-        if (s.find('div', {'id': 'user_information'}) == None):
-            return False
-        return True
-
     def login(self):
+        """
+        Performs the login on the site
+        """
         self.debug("Logging in...")
         url = 'https://chaturbate.com/auth/login/'
-        r = self.req.get(url)
+        result = self.req.get(url)
 
-        s = BeautifulSoup(r.text, "html.parser")
-        csrf = s.find('input', {'name': 'csrfmiddlewaretoken'}).get('value')
+        soup = BeautifulSoup(result.text, "html.parser")
+        csrf = soup.find('input', {'name': 'csrfmiddlewaretoken'}).get('value')
 
-        r = self.req.post(url,
-            data = {'username': self.username, 'password': self.password, 'csrfmiddlewaretoken': csrf},
-            cookies = r.cookies,
-            headers = {'Referer': url})
+        result = self.req.post(url,
+                               data={
+                                   'username': self.username,
+                                   'password': self.password,
+                                   'csrfmiddlewaretoken': csrf
+                               },
+                               cookies=result.cookies,
+                               headers={'Referer': url})
 
-        if (self.isLogged(html=r.text) == False):
+        if self.is_logged(result.text) is False:
             self.debug("[ERR]: Could not login")
             return False
         else:
@@ -174,14 +237,12 @@ class Chaturbate(object):
             return True
 
 if __name__ == "__main__":
-    Config = ConfigParser.ConfigParser()
-    Config.read("config.ini")
-    c = Chaturbate(Config.get('User', 'username'), Config.get('User', 'password'))
+    c = Chaturbate()
     while True:
         try:
-            c.processModels(c.getModels())
+            c.process_models(c.get_online_models())
             time.sleep(60)
-            c.checkRunning()
+            c.check_running()
         except KeyboardInterrupt:
-            c.killProcesses()
+            c.kill_processes()
             sys.exit()
