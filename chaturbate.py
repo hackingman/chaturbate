@@ -36,15 +36,24 @@ class Chaturbate(object):
     password = ''
     req = None
     processes = []
+    logger = None
 
     def __init__(self):
         """
         Instantiates the class.
         Reads username and password from config.ini
         """
-        logging.basicConfig(level=logging.INFO,
-                            format='%(asctime)s %(levelname)s %(message)s',
-                            propagate=False)
+        logging.getLogger("requests").setLevel(logging.WARNING)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
+        self.logger = logging.getLogger("chaturbate")
+        self.logger.setLevel(logging.DEBUG)
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.DEBUG)
+        formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s",
+                                      "%Y-%m-%d %H:%M:%S")
+        console_handler.setFormatter(formatter)
+        self.logger.addHandler(console_handler)
+
         config_parser = ConfigParser.ConfigParser()
         config_parser.read("config.ini")
         self.username = config_parser.get('User', 'username')
@@ -91,7 +100,7 @@ class Chaturbate(object):
         result = self.req.get(url)
 
         while self.is_logged(result.text) is False:
-            logging.warning("Not logged in")
+            self.logger.warning("Not logged in")
             self.login()
             result = self.req.get(url)
 
@@ -140,13 +149,13 @@ class Chaturbate(object):
             # already recording it, ignore
             if self.is_recording(model) is True:
                 continue
-            logging.info("Model " + model + " is chaturbating")
+            self.logger.info("Model " + model + " is chaturbating")
             info = self.get_model_info(model)
             if len(info) > 0:
                 if self.is_private(info) is False:
                     self.capture(info)
                 else:
-                    logging.warning("But the show is private")
+                    self.logger.warning("But the show is private")
 
     def get_model_info(self, name):
         """
@@ -159,7 +168,7 @@ class Chaturbate(object):
 
         embed = re.search(r"EmbedViewerSwf\(*(.+?)\);", html, re.DOTALL)
         if embed is None:
-            logging.warning('Cant find embed')
+            self.logger.warning('Cant find embed')
             return info
 
         for line in embed.group(1).split("\n"):
@@ -176,7 +185,7 @@ class Chaturbate(object):
         date_time = datetime.now()
         filename = "Chaturbate_" + info[1] + date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv"
 
-        logging.info("Capturing " + filename)
+        self.logger.info("Capturing " + filename)
 
         proc = self.run_rtmpdump(info, filename)
 
@@ -196,9 +205,9 @@ class Chaturbate(object):
 
         for proc in self.processes:
             if proc['proc'].poll() is not None:
-                logging.info(proc['model'] + " is no longer being captured")
+                self.logger.info(proc['model'] + " is no longer being captured")
                 if os.path.getsize(proc['filename']) == 0:
-                    logging.warning("Capture size is 0kb, deleting. Show probably is private")
+                    self.logger.warning("Capture size is 0kb, deleting. Show probably is private")
                     os.remove(proc['filename'])
                 remove.append(proc['model'])
 
@@ -218,7 +227,7 @@ class Chaturbate(object):
         """
         Performs the login on the site
         """
-        logging.info("Logging in...")
+        self.logger.info("Logging in...")
         url = 'https://chaturbate.com/auth/login/'
         result = self.req.get(url)
 
@@ -235,7 +244,7 @@ class Chaturbate(object):
                                headers={'Referer': url})
 
         if self.is_logged(result.text) is False:
-            logging.warning("Could not login")
+            self.logger.warning("Could not login")
             return False
         else:
             return True
@@ -261,10 +270,10 @@ class Chaturbate(object):
                     started_at = time.strftime("%D %H:%M", time.localtime(proc['time']))
                     recording_time = str(timedelta(seconds=int(time.time()) - proc['time']))
                     formatted_file_size = size(file_size)
-                    logging.info("Recording: " + proc['model'] + " - " +
-                                 "Started at " + started_at + " | " +
-                                 "Size: " + formatted_file_size + " | " +
-                                 "Duration: " + recording_time)
+                    self.logger.info("Recording: " + proc['model'] + " - " +
+                                     "Started at " + started_at + " | " +
+                                     "Size: " + formatted_file_size + " | " +
+                                     "Duration: " + recording_time)
 
     def is_private(self, info):
         """
