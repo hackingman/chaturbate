@@ -6,7 +6,7 @@ import requests, subprocess, re, urllib, time, ConfigParser
 import os, sys, signal
 from datetime import datetime
 
-class Chaturbate:
+class Chaturbate(object):
     username = ''
     password = ''
     req = None
