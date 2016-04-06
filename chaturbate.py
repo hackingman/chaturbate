@@ -26,7 +26,7 @@ import logging
 import requests
 from hurry.filesize import size
 from bs4 import BeautifulSoup
-from pushbullet import Pushbullet
+import pushbullet
 
 
 class Chaturbate(object):
@@ -64,7 +64,7 @@ class Chaturbate(object):
 
         # Try to connect to pushbullet
         try:
-            self.push_bullet = Pushbullet(config_parser.get('User', 'pushbullet'))
+            self.push_bullet = pushbullet.Pushbullet(config_parser.get('User', 'pushbullet'))
         except pushbullet.InvalidKeyError:
             self.push_bullet = None
 
