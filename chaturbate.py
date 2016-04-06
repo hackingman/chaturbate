@@ -250,7 +250,8 @@ class Chaturbate(object):
         Kills all child processes, used when ^C
         """
         for proc in self.processes:
-            os.kill(proc['proc'].pid, signal.SIGTERM)
+            if proc['proc'].poll() is not None:
+                proc['proc'].terminate()
 
     def login(self):
         """
@@ -318,7 +319,9 @@ class Chaturbate(object):
             if os.path.getsize(file_name) > 0:
                 result = False
 
-        proc.terminate()
+        if proc.poll() is not None:
+            proc.terminate()
+
         os.remove(file_name)
 
         return result
