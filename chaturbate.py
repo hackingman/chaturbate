@@ -65,7 +65,7 @@ class Chaturbate(object):
         # Try to connect to pushbullet
         try:
             self.push_bullet = Pushbullet(config_parser.get('User', 'pushbullet'))
-        except InvalidKeyError:
+        except pushbullet.InvalidKeyError:
             self.push_bullet = None
 
         # Create a requests object that has sessions
