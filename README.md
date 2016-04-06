@@ -8,7 +8,7 @@ The cams to record are the models that you **followed** on the site.
 
 ### Configuration
 
-Copy **config.ini.dist** to **config.ini** and edit it. Set your username and password.
+Copy **config.ini.dist** to **config.ini** and edit it. Set your username and password, and pushbullet api key, if you want.
 
 ### Requirements
 
@@ -19,6 +19,7 @@ You'll have to install this rtmpdump version from source.
 * [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) - To parse the HTML.
 * [hurry.filesize](https://pypi.python.org/pypi/hurry.filesize/) - To get pretty formatted file sizes.
 * [requests](http://docs.python-requests.org/en/master/) - To make requests and keep the session.
+* [pushbullet.py](https://github.com/randomchars/pushbullet.py) - To send notifications
 
 These three can be installed with pip (see below).
 

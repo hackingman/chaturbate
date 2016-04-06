@@ -26,6 +26,7 @@ import logging
 import requests
 from hurry.filesize import size
 from bs4 import BeautifulSoup
+from pushbullet import Pushbullet
 
 
 class Chaturbate(object):
@@ -37,12 +38,15 @@ class Chaturbate(object):
     req = None
     processes = []
     logger = None
+    push_bullet = None
 
     def __init__(self):
         """
         Instantiates the class.
         Reads username and password from config.ini
         """
+
+        # Configure logging
         logging.getLogger("requests").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
         self.logger = logging.getLogger("chaturbate")
@@ -54,11 +58,21 @@ class Chaturbate(object):
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)
 
+        # Read configuration
         config_parser = ConfigParser.ConfigParser()
         config_parser.read("config.ini")
+
+        # Try to connect to pushbullet
+        try:
+            self.push_bullet = Pushbullet(config_parser.get('User', 'pushbullet'))
+        except InvalidKeyError:
+            self.push_bullet = None
+
+        # Create a requests object that has sessions
+        self.req = requests.Session()
+
         self.username = config_parser.get('User', 'username')
         self.password = config_parser.get('User', 'password')
-        self.req = requests.Session()
 
     @staticmethod
     def is_logged(html):
@@ -185,7 +199,10 @@ class Chaturbate(object):
         date_time = datetime.now()
         filename = "Chaturbate_" + info[1] + date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv"
 
-        self.logger.info("Capturing " + filename)
+        message = "Capturing " + filename
+        if self.push_bullet is not None:
+            self.push_bullet.push_note("Chaturbate", message)
+        self.logger.info(message)
 
         proc = self.run_rtmpdump(info, filename)
 
@@ -206,9 +223,21 @@ class Chaturbate(object):
         for proc in self.processes:
             if proc['proc'].poll() is not None:
                 self.logger.info(proc['model'] + " is no longer being captured")
-                if os.path.getsize(proc['filename']) == 0:
-                    self.logger.warning("Capture size is 0kb, deleting. Show probably is private")
-                    os.remove(proc['filename'])
+                if os.path.isfile(proc['filename']):
+                    file_size = os.path.getsize(proc['filename'])
+                    if file_size > 0:
+                        self.logger.warning("Capture size is 0kb, deleting. Show probably is private")
+                        os.remove(proc['filename'])
+                    else:
+                        if self.push_bullet is not None:
+                            started_at = time.strftime("%D %H:%M", time.localtime(proc['time']))
+                            recording_time = str(timedelta(seconds=int(time.time()) - proc['time']))
+                            formatted_file_size = size(file_size)
+                            self.push_bullet.push_note("Chaturbate", "Finished: " + proc['model'] + " - " +
+                                                       "Started at " + started_at + " | " +
+                                                       "Size: " + formatted_file_size + " | " +
+                                                       "Duration: " + recording_time)
+
                 remove.append(proc['model'])
 
         procs = self.processes
