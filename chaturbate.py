@@ -25,7 +25,6 @@ import logging
 import requests
 from hurry.filesize import size
 from bs4 import BeautifulSoup
-import pushbullet
 
 
 class Chaturbate(object):
@@ -61,12 +60,15 @@ class Chaturbate(object):
         config_parser = ConfigParser.ConfigParser()
         config_parser.read("config.ini")
 
-        # try to connect to pushbullet
-        try:
-            self.push_bullet = pushbullet.Pushbullet(
-                config_parser.get('User', 'pushbullet'))
-        except pushbullet.InvalidKeyError:
-            self.push_bullet = None
+        # is pushbullet is enabled on the config
+        if config_parser.get('PushBullet', 'enable') == 'true':
+            # try to import it and connect
+            try:
+                import pushbullet
+                self.push_bullet = pushbullet.Pushbullet(
+                    config_parser.get('PushBullet', 'access_token'))
+            except (ImportError, pushbullet.InvalidKeyError):
+                self.push_bullet = None
 
         # create a requests object that has sessions
         self.req = requests.Session()
@@ -251,13 +253,13 @@ class Chaturbate(object):
                         self.logger.warning("Capture size is 0kb, deleting.")
                         os.remove(proc['filename'])
                     else:
-                        message = ("Finished:",
-                                   proc['model'], "-",
-                                   "Started at",
-                                   proc_stats['started_at'], "|",
-                                   "Size:",
-                                   proc_stats['formatted_file_size'], "|",
-                                   "Duration:",
+                        message = ("Finished:" +
+                                   proc['model'], "-" +
+                                   "Started at" +
+                                   proc_stats['started_at'], "|" +
+                                   "Size:" +
+                                   proc_stats['formatted_file_size'], "|" +
+                                   "Duration:" +
                                    proc_stats['recording_time'])
                         self.logger.info(message)
                         if self.push_bullet is not None:
@@ -323,13 +325,13 @@ class Chaturbate(object):
             if os.path.isfile(proc['filename']):
                 proc_stats = self.get_proc_stats(proc)
                 if proc_stats['file_size'] > 0:
-                    message = ("Recording:",
-                               proc['model'], "-",
-                               "Started at",
-                               proc_stats['started_at'], "|",
-                               "Size:",
-                               proc_stats['formatted_file_size'], "|",
-                               "Duration:",
+                    message = ("Recording: " +
+                               proc['model'] + " - " +
+                               "Started at " +
+                               proc_stats['started_at'] + " | " +
+                               "Size: " +
+                               proc_stats['formatted_file_size'] + " | " +
+                               "Duration: " +
                                proc_stats['recording_time'])
                     self.logger.info(message)
 

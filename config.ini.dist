@@ -1,4 +1,7 @@
 [User]
 username=o_barbas
 password=BENFICA
-pushbullet=your_pushbullet_token
+
+[PushBullet]
+enabled=false
+access_token=your_pushbullet_token
