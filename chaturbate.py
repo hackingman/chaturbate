@@ -13,9 +13,6 @@ The requirements are:
  * hurry.filesize - https://pypi.python.org/pypi/hurry.filesize/
  * pushbullet.py - https://github.com/randomchars/pushbullet.py (optional)
 """
-__author__ =  'Pedro de Oliveira'
-__version__=  '0.1'
-__license__ = 'BSD'
 
 import subprocess
 import re
