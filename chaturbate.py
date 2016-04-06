@@ -20,7 +20,6 @@ import time
 import ConfigParser
 import os
 import sys
-import signal
 from datetime import datetime, timedelta
 import logging
 import requests
@@ -46,7 +45,7 @@ class Chaturbate(object):
         Reads username and password from config.ini
         """
 
-        # Configure logging
+        # configure logging
         logging.getLogger("requests").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
         self.logger = logging.getLogger("chaturbate")
@@ -58,17 +57,18 @@ class Chaturbate(object):
         console_handler.setFormatter(formatter)
         self.logger.addHandler(console_handler)
 
-        # Read configuration
+        # read configuration
         config_parser = ConfigParser.ConfigParser()
         config_parser.read("config.ini")
 
-        # Try to connect to pushbullet
+        # try to connect to pushbullet
         try:
-            self.push_bullet = pushbullet.Pushbullet(config_parser.get('User', 'pushbullet'))
+            self.push_bullet = pushbullet.Pushbullet(
+                config_parser.get('User', 'pushbullet'))
         except pushbullet.InvalidKeyError:
             self.push_bullet = None
 
-        # Create a requests object that has sessions
+        # create a requests object that has sessions
         self.req = requests.Session()
 
         self.username = config_parser.get('User', 'username')
@@ -107,9 +107,24 @@ class Chaturbate(object):
 
         return subprocess.Popen(args)
 
+    @staticmethod
+    def get_proc_stats(proc):
+        """
+        Returns a dict with various info about the file being captured
+        """
+        file_size = os.path.getsize(proc['filename'])
+        return {
+            'file_size': file_size,
+            'formatted_file_size': size(file_size),
+            'started_at': time.strftime(
+                "%D %H:%M", time.localtime(proc['time'])),
+            'recording_time': str(
+                timedelta(seconds=int(time.time()) - proc['time']))
+            }
+
     def make_request(self, url):
         """
-        Does a GET request, and login if required
+        Does a GET request, and logs in if required
         """
         result = self.req.get(url)
 
@@ -124,22 +139,23 @@ class Chaturbate(object):
         """
         Return a list of your online followed models
         """
-
         url = 'https://chaturbate.com/followed-cams/'
         html = self.make_request(url)
         soup = BeautifulSoup(html, "html.parser")
 
         models = []
-        models_li = soup.find('ul', {'class': 'list'}).findAll('li', recursive=False)
+        models_li = soup.find(
+            'ul', {'class': 'list'}).findAll('li', recursive=False)
 
         for model in models_li:
             name = model.find('a')['href'].replace('/', '')
 
-            # private show
+            # it seems that when <div class='thumbnail_label_c_private_show'>
+            # exists on the model <li> then the show is private
             if model.find('div', {'class': 'thumbnail_label_c_private_show'}):
                 continue
 
-            # offline
+            # if the status message is "OFFLINE", then who am i to doubt it
             status = model.find('div', {'class': 'thumbnail_label'}).text
             if status == "OFFLINE":
                 continue
@@ -165,7 +181,9 @@ class Chaturbate(object):
                 continue
             self.logger.info("Model " + model + " is chaturbating")
             info = self.get_model_info(model)
+            # if the embed info was scrapped
             if len(info) > 0:
+                # check if the show is private
                 if self.is_private(info) is False:
                     self.capture(info)
                 else:
@@ -197,12 +215,13 @@ class Chaturbate(object):
         Starts capturing the stream with rtmpdump
         """
         date_time = datetime.now()
-        filename = "Chaturbate_" + info[1] + date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv"
+        filename = ("Chaturbate_" + info[1] +
+                    date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv")
 
         message = "Capturing " + filename
+        self.logger.info(message)
         if self.push_bullet is not None:
             self.push_bullet.push_note("Chaturbate", message)
-        self.logger.info(message)
 
         proc = self.run_rtmpdump(info, filename)
 
@@ -220,26 +239,33 @@ class Chaturbate(object):
         """
         remove = []
 
+        # iterate over all "running" processes
         for proc in self.processes:
+            # if the process has stopped
             if proc['proc'].poll() is not None:
-                self.logger.info(proc['model'] + " is no longer being captured")
+                self.logger.info(
+                    proc['model'] + " is no longer being captured")
                 if os.path.isfile(proc['filename']):
-                    file_size = os.path.getsize(proc['filename'])
-                    if file_size > 0:
-                        self.logger.warning("Capture size is 0kb, deleting. Show probably is private")
+                    proc_stats = self.get_proc_stats(proc)
+                    if proc_stats['file_size'] == 0:
+                        self.logger.warning("Capture size is 0kb, deleting.")
                         os.remove(proc['filename'])
                     else:
+                        message = ("Finished:",
+                                   proc['model'], "-",
+                                   "Started at",
+                                   proc_stats['started_at'], "|",
+                                   "Size:",
+                                   proc_stats['formatted_file_size'], "|",
+                                   "Duration:",
+                                   proc_stats['recording_time'])
+                        self.logger.info(message)
                         if self.push_bullet is not None:
-                            started_at = time.strftime("%D %H:%M", time.localtime(proc['time']))
-                            recording_time = str(timedelta(seconds=int(time.time()) - proc['time']))
-                            formatted_file_size = size(file_size)
-                            self.push_bullet.push_note("Chaturbate", "Finished: " + proc['model'] + " - " +
-                                                       "Started at " + started_at + " | " +
-                                                       "Size: " + formatted_file_size + " | " +
-                                                       "Duration: " + recording_time)
+                            self.push_bullet.push_note("Chaturbate", message)
 
                 remove.append(proc['model'])
 
+        # remove all items in remove from self.processes
         procs = self.processes
         for item in remove:
             procs = [f for f in procs if f['model'] != item]
@@ -295,20 +321,22 @@ class Chaturbate(object):
         """
         for proc in self.processes:
             if os.path.isfile(proc['filename']):
-                file_size = os.path.getsize(proc['filename'])
-                if file_size > 0:
-                    started_at = time.strftime("%D %H:%M", time.localtime(proc['time']))
-                    recording_time = str(timedelta(seconds=int(time.time()) - proc['time']))
-                    formatted_file_size = size(file_size)
-                    self.logger.info("Recording: " + proc['model'] + " - " +
-                                     "Started at " + started_at + " | " +
-                                     "Size: " + formatted_file_size + " | " +
-                                     "Duration: " + recording_time)
+                proc_stats = self.get_proc_stats(proc)
+                if proc_stats['file_size'] > 0:
+                    message = ("Recording:",
+                               proc['model'], "-",
+                               "Started at",
+                               proc_stats['started_at'], "|",
+                               "Size:",
+                               proc_stats['formatted_file_size'], "|",
+                               "Duration:",
+                               proc_stats['recording_time'])
+                    self.logger.info(message)
 
     def is_private(self, info):
         """
         Tries to check if a stream is private.
-        Runs rtmpdump for 10 seconds and checks if it recorded anything
+        Runs rtmpdump for 10 seconds and checks if anything was recorded
         """
         result = True
 
@@ -319,9 +347,11 @@ class Chaturbate(object):
             if os.path.getsize(file_name) > 0:
                 result = False
 
+        # if the process is still running, kill it
         if proc.poll() is not None:
             proc.terminate()
 
+        # and delete the temporary file
         os.remove(file_name)
 
         return result
