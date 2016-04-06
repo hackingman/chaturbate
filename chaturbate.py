@@ -3,15 +3,19 @@
 
 
 """
-This example module automatically records shows from your followed models
+This module automatically records shows from your followed models
 using rtmpdump.
 
 The requirements are:
-    RTMPDump-ksv - https://github.com/BurntSushi/rtmpdump-ksv
-    BeautifulSoup - https://www.crummy.com/software/BeautifulSoup/
-    requests - http://docs.python-requests.org/en/master/
-    hurry.filesize - https://pypi.python.org/pypi/hurry.filesize/
+ * RTMPDump-ksv - https://github.com/BurntSushi/rtmpdump-ksv
+ * BeautifulSoup - https://www.crummy.com/software/BeautifulSoup/
+ * requests - http://docs.python-requests.org/en/master/
+ * hurry.filesize - https://pypi.python.org/pypi/hurry.filesize/
+ * pushbullet.py - https://github.com/randomchars/pushbullet.py (optional)
 """
+__author__ =  'Pedro de Oliveira'
+__version__=  '0.1'
+__license__ = 'BSD'
 
 import subprocess
 import re
@@ -29,19 +33,24 @@ from bs4 import BeautifulSoup
 
 class Chaturbate(object):
     """
-    All-in-one class to record chaturbate streams
+    All-in-one class to record Chaturbate streams.
     """
     username = ''
+    """The username read from the config."""
     password = ''
+    """The password read from the config."""
     req = None
+    """The requests object with sessions."""
     processes = []
+    """A list with all the started/running processes."""
     logger = None
+    """An instance of the python logger."""
     push_bullet = None
+    """An instance of a pushbullet object."""
 
     def __init__(self):
         """
-        Instantiates the class.
-        Reads username and password from config.ini
+        Configures logging, reads configuration and tries to enable pushbullet
         """
 
         # configure logging
@@ -78,8 +87,16 @@ class Chaturbate(object):
 
     @staticmethod
     def is_logged(html):
-        """
-        Checks if youre currently logged in
+        """Checks if you're currently logged in.
+
+        Searches the HTML with BeautifulSoup to see if there is a
+        <div id='user_information'> in it.
+        If its found then we are logged in.
+
+        :param str html: The HTML source to check.
+
+        :return: True if successful, False otherwise.
+        :rtype: bool
         """
         soup = BeautifulSoup(html, "html.parser")
 
@@ -89,8 +106,13 @@ class Chaturbate(object):
 
     @staticmethod
     def run_rtmpdump(info, output):
-        """
-        Starts an rtmpdump with information given to the ouput file
+        """Runs rtmpdump with the provided parameters.
+
+        :param info list: A list with all the rtmp info, generated in :func:`get_model_info`.
+        :param output str: Filename where to output the stream.
+
+        :return: A Popen object (process).
+        :rtype: Popen
         """
         args = [
             "rtmpdump",
@@ -111,8 +133,12 @@ class Chaturbate(object):
 
     @staticmethod
     def get_proc_stats(proc):
-        """
-        Returns a dict with various info about the file being captured
+        """Generates a dict with various info about the file being captured.
+
+        :param proc dict: A dict with information about a rtmpdump process, generated in :func:`capture`.
+
+        :return: A dict with statistics about the recording.
+        :rtype: dict
         """
         file_size = os.path.getsize(proc['filename'])
         return {
@@ -125,8 +151,12 @@ class Chaturbate(object):
             }
 
     def make_request(self, url):
-        """
-        Does a GET request, and logs in if required
+        """Does a GET request and returns the HTML content.
+
+        :param url str: The URL to open.
+
+        :return: The HTML source of the requested URL.
+        :rtype: str
         """
         result = self.req.get(url)
 
@@ -138,8 +168,12 @@ class Chaturbate(object):
         return result.text
 
     def get_online_models(self):
-        """
-        Return a list of your online followed models
+        """Return a list with the models you follow that are online.
+
+        This function ignores (or tries to) private shows, and offline models.
+
+        :return: A list with the online models name.
+        :rtype: list
         """
         url = 'https://chaturbate.com/followed-cams/'
         html = self.make_request(url)
@@ -167,15 +201,21 @@ class Chaturbate(object):
         return models
 
     def is_recording(self, model):
-        """
-        Checks if a model is already being recorded
+        """Checks if a model is already being recorded.
+
+        Checks if the parameter is already in the :data:`processes` list.
+
+        :param model str: The model name to check.
+
+        :return: True if successful, False otherwise.
+        :rtype: bool
         """
         return model in [proc['model'] for proc in self.processes]
 
     def process_models(self, models):
-        """
-        Processes a list that has the online models
-        and starts capturing them
+        """Processes a list that has the online models and starts capturing them.
+
+        :param models list: The models list generated in :func:`get_online_models`.
         """
         for model in models:
             # already recording it, ignore
@@ -192,8 +232,12 @@ class Chaturbate(object):
                     self.logger.warning("But the show is private")
 
     def get_model_info(self, name):
-        """
-        Returns a list with all EmbedViewerSwf variables from the model
+        """Generates a list with all EmbedViewerSwf variables from the HTML.
+
+        :param model str: The model name to get info.
+
+        :return: A list with all informations for the FLV player.
+        :rtype: list
         """
         url = "https://chaturbate.com/" + name + "/"
         html = self.make_request(url)
@@ -213,8 +257,11 @@ class Chaturbate(object):
         return info
 
     def capture(self, info):
-        """
-        Starts capturing the stream with rtmpdump
+        """Capture a stream.
+
+        After running the rtmpdump process this adds some information about it to the :data:`processes` list.
+
+        :param info list: A list with all the rtmp info, generated in :func:`get_model_info`.
         """
         date_time = datetime.now()
         filename = ("Chaturbate_" + info[1] +
@@ -236,8 +283,10 @@ class Chaturbate(object):
             })
 
     def check_running(self):
-        """
-        Checks if the rtmpdump processes are still running
+        """Checks if the processes are still running.
+
+        This function checks if the :data:`processes` are still running.
+        If they arent, remove them from the list.
         """
         remove = []
 
@@ -274,16 +323,14 @@ class Chaturbate(object):
         self.processes = procs
 
     def kill_processes(self):
-        """
-        Kills all child processes, used when ^C
+        """Kills all child processes, used when ^C is pressed.
         """
         for proc in self.processes:
             if proc['proc'].poll() is not None:
                 proc['proc'].terminate()
 
     def login(self):
-        """
-        Performs the login on the site
+        """Performs the login on the site.
         """
         self.logger.info("Logging in...")
         url = 'https://chaturbate.com/auth/login/'
@@ -308,8 +355,11 @@ class Chaturbate(object):
             return True
 
     def do_cycle(self):
-        """
-        Do a full cycle
+        """Does a full cycle.
+
+        * Checks the processes.
+        * Gets online models.
+        * Process them.
         """
         c.check_running()
         online_models = self.get_online_models()
@@ -318,8 +368,7 @@ class Chaturbate(object):
         self.print_recording()
 
     def print_recording(self):
-        """
-        Print statistics about cams being recorded
+        """Print statistics about cams being recorded.
         """
         for proc in self.processes:
             if os.path.isfile(proc['filename']):
@@ -336,9 +385,14 @@ class Chaturbate(object):
                     self.logger.info(message)
 
     def is_private(self, info):
-        """
-        Tries to check if a stream is private.
-        Runs rtmpdump for 10 seconds and checks if anything was recorded
+        """Checks if a stream is private.
+
+        Runs rtmpdump for 10 seconds and checks if the file size is > 0.
+
+        :param list info: A list with all the rtmp info, generated in :func:`get_model_info`.
+
+        :return: True if private, False otherwise.
+        :rtype: bool
         """
         result = True
 
