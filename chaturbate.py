@@ -300,11 +300,11 @@ class Chaturbate(object):
                         os.remove(proc['filename'])
                     else:
                         message = ("Finished:" +
-                                   proc['model'], "-" +
+                                   proc['model'] + " - " +
                                    "Started at" +
-                                   proc_stats['started_at'], "|" +
+                                   proc_stats['started_at'] + " | " +
                                    "Size:" +
-                                   proc_stats['formatted_file_size'], "|" +
+                                   proc_stats['formatted_file_size'] + " | " +
                                    "Duration:" +
                                    proc_stats['recording_time'])
                         self.logger.info(message)
