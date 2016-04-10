@@ -374,12 +374,10 @@ class Chaturbate(object):
                 if proc_stats['file_size'] > 0:
                     message = ("Recording: " +
                                proc['model'] + " - " +
-                               "Started at " +
-                               proc_stats['started_at'] + " | " +
-                               "Size: " +
-                               proc_stats['formatted_file_size'] + " | " +
                                "Duration: " +
-                               proc_stats['recording_time'])
+                               proc_stats['recording_time'] + " - " +
+                               "Size: " +
+                               proc_stats['formatted_file_size'])
                     self.logger.info(message)
 
     def is_private(self, info):
