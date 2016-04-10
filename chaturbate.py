@@ -143,7 +143,7 @@ class Chaturbate(object):
             'file_size': file_size,
             'formatted_file_size': size(file_size),
             'started_at': time.strftime(
-                "%D %H:%M", time.localtime(proc['time'])),
+                "%H:%M", time.localtime(proc['time'])),
             'recording_time': str(
                 timedelta(seconds=int(time.time()) - proc['time']))
             }
