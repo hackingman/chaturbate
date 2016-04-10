@@ -302,7 +302,7 @@ class Chaturbate(object):
                     else:
                         message = ("Finished:" +
                                    proc['model'] + " - " +
-                                   "Started at" +
+                                   "Started at " +
                                    proc_stats['started_at'] + " | " +
                                    "Size:" +
                                    proc_stats['formatted_file_size'] + " | " +
