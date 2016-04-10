@@ -102,7 +102,7 @@ class Chaturbate(object):
         return True
 
     @staticmethod
-    def run_rtmpdump(info, output):
+    def run_rtmpdump(info, output, extra_arg=""):
         """Runs rtmpdump with the provided parameters.
 
         :param info list: A list with all the rtmp info, generated in :func:`get_model_info`.
@@ -115,6 +115,7 @@ class Chaturbate(object):
             "rtmpdump",
             "--quiet",
             "--live",
+            extra_arg,
             "--rtmp", "rtmp://" + info[2] + "/live-edge",
             "--pageUrl", "http://chaturbate.com/" + info[1],
             "--conn", "S:" + info[8],
@@ -392,20 +393,16 @@ class Chaturbate(object):
         :rtype: bool
         """
         result = True
+        seconds = 5
 
         file_name = "test.flv"
-        proc = self.run_rtmpdump(info, file_name)
-        time.sleep(10)
+        proc = self.run_rtmpdump(info, file_name, extra_arg="-B " + str(seconds))
+        proc.wait()
+
         if os.path.isfile(file_name):
             if os.path.getsize(file_name) > 0:
                 result = False
-
-        # if the process is still running, kill it
-        if proc.poll() is not None:
-            proc.terminate()
-
-        # and delete the temporary file
-        os.remove(file_name)
+            os.remove(file_name)
 
         return result
 
