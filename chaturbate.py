@@ -44,6 +44,7 @@ class Chaturbate(object):
     """An instance of the python logger."""
     push_bullet = None
     """An instance of a pushbullet object."""
+    config_parser = None
 
     def __init__(self):
         """
@@ -63,24 +64,24 @@ class Chaturbate(object):
         self.logger.addHandler(console_handler)
 
         # read configuration
-        config_parser = ConfigParser.ConfigParser()
-        config_parser.read("config.ini")
+        self.config_parser = ConfigParser.ConfigParser()
+        self.config_parser.read("config.ini")
 
         # is pushbullet is enabled on the config
-        if config_parser.get('PushBullet', 'enable') == 'true':
+        if self.config_parser.get('PushBullet', 'enable') == 'true':
             # try to import it and connect
             try:
                 import pushbullet
                 self.push_bullet = pushbullet.Pushbullet(
-                    config_parser.get('PushBullet', 'access_token'))
+                    self.config_parser.get('PushBullet', 'access_token'))
             except (ImportError, pushbullet.InvalidKeyError):
                 self.push_bullet = None
 
         # create a requests object that has sessions
         self.req = requests.Session()
 
-        self.username = config_parser.get('User', 'username')
-        self.password = config_parser.get('User', 'password')
+        self.username = self.config_parser.get('User', 'username')
+        self.password = self.config_parser.get('User', 'password')
 
     @staticmethod
     def is_logged(html):
@@ -261,8 +262,14 @@ class Chaturbate(object):
 
         :param info list: A list with all the rtmp info, generated in :func:`get_model_info`.
         """
+        directory = self.config_parser.get('Directories', 'capturing')
+
+        if os.path.isdir(directory) is False:
+            os.mkdir(directory)
+
         date_time = datetime.now()
-        filename = ("Chaturbate_" + info[1] +
+
+        filename = (directory + "/" +"Chaturbate_" + info[1] +
                     date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv")
 
         message = "Capturing " + filename
@@ -274,6 +281,8 @@ class Chaturbate(object):
 
         self.processes.append(
             {
+                'id': 'rtmp-' + info[1],
+                'type': 'rtmpdump',
                 'model': info[1],
                 'filename': filename,
                 'time': int(time.time()),
@@ -292,32 +301,36 @@ class Chaturbate(object):
         for proc in self.processes:
             # if the process has stopped
             if proc['proc'].poll() is not None:
-                self.logger.info(
-                    proc['model'] + " is no longer being captured")
-                if os.path.isfile(proc['filename']):
-                    proc_stats = self.get_proc_stats(proc)
-                    if proc_stats['file_size'] == 0:
-                        self.logger.warning("Capture size is 0kb, deleting.")
-                        os.remove(proc['filename'])
-                    else:
-                        message = ("Finished:" +
-                                   proc['model'] + " - " +
-                                   "Started at " +
-                                   proc_stats['started_at'] + " | " +
-                                   "Size:" +
-                                   proc_stats['formatted_file_size'] + " | " +
-                                   "Duration:" +
-                                   proc_stats['recording_time'])
-                        self.logger.info(message)
-                        if self.push_bullet is not None:
-                            self.push_bullet.push_note("Chaturbate", message)
+                if proc['type'] == 'rtmpdump':
+                    self.logger.info(
+                        proc['model'] + " is no longer being captured")
+                    if os.path.isfile(proc['filename']):
+                        proc_stats = self.get_proc_stats(proc)
+                        if proc_stats['file_size'] == 0:
+                            self.logger.warning("Capture size is 0kb, deleting.")
+                            os.remove(proc['filename'])
+                        else:
+                            self.move_to_complete(proc)
+                            message = ("Finished:" +
+                                       proc['model'] + " - " +
+                                       "Started at " +
+                                       proc_stats['started_at'] + " | " +
+                                       "Size:" +
+                                       proc_stats['formatted_file_size'] + " | " +
+                                       "Duration:" +
+                                       proc_stats['recording_time'])
+                            self.logger.info(message)
+                            if self.push_bullet is not None:
+                                self.push_bullet.push_note("Chaturbate", message)
+                    elif proc['type'] == 'ffmpeg':
+                        print "Going to delete: " + proc['source']
 
-                remove.append(proc['model'])
+                remove.append(proc['id'])
 
         # remove all items in remove from self.processes
         procs = self.processes
         for item in remove:
-            procs = [f for f in procs if f['model'] != item]
+            procs = [f for f in procs if f['id'] != item]
         self.processes = procs
 
     def kill_processes(self):
@@ -403,6 +416,43 @@ class Chaturbate(object):
             os.remove(file_name)
 
         return result
+
+    def move_to_complete(self, proc):
+        directory = self.config_parser.get('Directories', 'complete')
+
+        if os.path.isdir(directory) is False:
+            os.mkdir(directory)
+
+        source = proc['filename']
+        flv = source.replace("Capturing/", "Complete/")
+        os.rename(source, flv)
+        mp4 = destination.replace(".flv", ".mp4")
+
+        if self.config_parser.get('FFmpeg', 'enable') == "true":
+            self.run_rtmpdump(proc['model'], flv, mp4)
+
+    def run_ffmpeg(self, model, source, destination):
+        args = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel panic",
+            "-i",
+            source,
+            extra_arg,
+            destination
+        ]
+
+        proc = subprocess.Popen(args)
+
+        self.processes.append(
+            {
+                'id': 'ffmpeg-' + model,
+                'type': 'ffmpeg',
+                'model': model,
+                'source': source,
+                'destination': destination,
+                'proc': proc,
+            })
 
 if __name__ == "__main__":
     c = Chaturbate()

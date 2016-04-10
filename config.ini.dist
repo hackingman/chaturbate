@@ -2,6 +2,14 @@
 username=o_barbas
 password=BENFICA
 
+[Directories]
+capturing=Capturing
+complete=Complete
+
+[FFmpeg]
+enable=false
+options=-c:v copy -c:a libmp3lame
+
 [PushBullet]
 enable=false
 access_token=your_pushbullet_token
