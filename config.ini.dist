@@ -8,7 +8,7 @@ complete=Complete
 
 [FFmpeg]
 enable=false
-options=-c:v copy -c:a libmp3lame
+options=-c:v copy -c:a libfaac
 
 [PushBullet]
 enable=false
