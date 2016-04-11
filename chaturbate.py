@@ -439,7 +439,7 @@ class Chaturbate(object):
             "-loglevel panic",
             "-i",
             source,
-            extra_arg,
+            self.config_parser.get('FFmpeg', 'options'),
             destination
         ]
 
