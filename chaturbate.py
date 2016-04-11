@@ -382,7 +382,7 @@ class Chaturbate(object):
         """Print statistics about cams being recorded.
         """
         for proc in self.processes:
-            if os.path.isfile(proc['filename']):
+            if proc['type'] == 'rtmpdump' and os.path.isfile(proc['filename']):
                 proc_stats = self.get_proc_stats(proc)
                 if proc_stats['file_size'] > 0:
                     message = ("Recording: " +
@@ -436,7 +436,6 @@ class Chaturbate(object):
         args = [
             "ffmpeg",
             "-hide_banner",
-            "-loglevel panic",
             "-i",
             source,
             self.config_parser.get('FFmpeg', 'options'),
