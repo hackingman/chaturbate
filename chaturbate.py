@@ -424,9 +424,10 @@ class Chaturbate(object):
             os.mkdir(directory)
 
         source = proc['filename']
-        flv = source.replace("Capturing/", "Complete/")
+        flv = source.replace(self.config_parser.get('Directories', 'capturing') + "/",
+                             self.config_parser.get('Directories', 'capturing') + "/")
         os.rename(source, flv)
-        mp4 = destination.replace(".flv", ".mp4")
+        mp4 = flv.replace(".flv", ".mp4")
 
         if self.config_parser.get('FFmpeg', 'enable') == "true":
             self.run_rtmpdump(proc['model'], flv, mp4)
