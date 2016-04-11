@@ -12,7 +12,7 @@ Copy **config.ini.dist** to **config.ini** and edit it. Set your username and pa
 
 ### Requirements
 
-* [rtmpdump-ksv](https://github.com/BurntSushi/rtmpdump) - To record the rtmp streams.
+* [rtmpdump-ksv](https://github.com/BurntSushi/rtmpdump-ksv) - To record the rtmp streams.
 
 You'll have to install this rtmpdump version from source.
 
