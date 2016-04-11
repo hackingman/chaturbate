@@ -430,7 +430,7 @@ class Chaturbate(object):
         mp4 = flv.replace(".flv", ".mp4")
 
         if self.config_parser.get('FFmpeg', 'enable') == "true":
-            self.run_rtmpdump(proc['model'], flv, mp4)
+            self.run_ffmpeg(proc['model'], flv, mp4)
 
     def run_ffmpeg(self, model, source, destination):
         args = [
