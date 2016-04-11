@@ -249,7 +249,7 @@ class Chaturbate(object):
             return info
 
         for line in embed.group(1).split("\n"):
-            data = re.search(""" +["'](.*)?["'],""", line)
+            data = re.search(r" +[\"'](.*)?[\"'],", line)
             if data:
                 info.append(data.group(1))
 
@@ -269,13 +269,15 @@ class Chaturbate(object):
 
         date_time = datetime.now()
 
-        filename = (directory + "/" +"Chaturbate_" + info[1] +
+        filename = ("Chaturbate_" + info[1] +
                     date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv")
 
         message = "Capturing " + filename
         self.logger.info(message)
         if self.push_bullet is not None:
             self.push_bullet.push_note("Chaturbate", message)
+
+        filename = os.path.join(directory, filename)
 
         proc = self.run_rtmpdump(info, filename)
 
@@ -322,8 +324,11 @@ class Chaturbate(object):
                             self.logger.info(message)
                             if self.push_bullet is not None:
                                 self.push_bullet.push_note("Chaturbate", message)
-                    elif proc['type'] == 'ffmpeg':
-                        print "Going to delete: " + proc['source']
+                elif proc['type'] == 'ffmpeg':
+                    if proc['proc'].poll() == 0:
+                        os.remove(proc['source'])
+                    else:
+                        self.logger.warning("Something went wrong with ffmpeg, not deleting")
 
                 remove.append(proc['id'])
 
@@ -424,8 +429,8 @@ class Chaturbate(object):
             os.mkdir(directory)
 
         source = proc['filename']
-        flv = source.replace(self.config_parser.get('Directories', 'capturing') + "/",
-                             self.config_parser.get('Directories', 'capturing') + "/")
+        flv = source.replace(self.config_parser.get('Directories', 'capturing') + os.sep,
+                             self.config_parser.get('Directories', 'complete') + os.sep)
         os.rename(source, flv)
         mp4 = flv.replace(".flv", ".mp4")
 
@@ -434,15 +439,16 @@ class Chaturbate(object):
 
     def run_ffmpeg(self, model, source, destination):
         args = [
-            "ffmpeg",
-            "-hide_banner",
-            "-i",
-            source,
-            self.config_parser.get('FFmpeg', 'options'),
-            destination
-        ]
+                ['ffmpeg', '-i', source],
+                self.config_parser.get('FFmpeg', 'options').split(),
+                [destination]
+                ]
 
-        proc = subprocess.Popen(args)
+ 
+        args = [item for sublist in args for item in sublist]
+
+        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, error = proc.communicate()
 
         self.processes.append(
             {
