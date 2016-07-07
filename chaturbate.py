@@ -157,18 +157,21 @@ class Chaturbate(object):
         :return: The HTML source of the requested URL.
         :rtype: str
         """
-        try:
-            result = self.req.get(url)
-        except requests.exceptions.ConnectionError:
-            result = None
+        result = None
 
-        while (result is None) or (self.is_logged(result.text) is False):
-            self.logger.warning("Not logged in")
-            self.login()
+        while result is None:
             try:
                 result = self.req.get(url)
             except requests.exceptions.ConnectionError:
                 result = None
+
+            while (result is not None) and (self.is_logged(result.text) is False):
+                self.logger.warning("Not logged in")
+                self.login()
+                try:
+                    result = self.req.get(url)
+                except requests.exceptions.ConnectionError:
+                    result = None
 
         return result.text
 
