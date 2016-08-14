@@ -10,7 +10,6 @@ The requirements are:
  * RTMPDump-ksv - https://github.com/BurntSushi/rtmpdump-ksv
  * BeautifulSoup - https://www.crummy.com/software/BeautifulSoup/
  * requests - http://docs.python-requests.org/en/master/
- * hurry.filesize - https://pypi.python.org/pypi/hurry.filesize/
 """
 
 import subprocess
@@ -23,7 +22,6 @@ import sys
 from datetime import datetime, timedelta
 import logging
 import requests
-from hurry.filesize import size
 from bs4 import BeautifulSoup
 
 
@@ -69,6 +67,17 @@ class Chaturbate(object):
 
         self.username = self.config_parser.get('User', 'username')
         self.password = self.config_parser.get('User', 'password')
+
+    @staticmethod
+    def get_human_size(nbytes):
+        suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+        if nbytes == 0: return '0 B'
+        i = 0
+        while nbytes >= 1024 and i < len(suffixes)-1:
+            nbytes /= 1024.
+            i += 1
+        f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
+        return '%s %s' % (f, suffixes[i])
 
     @staticmethod
     def is_logged(html):
@@ -126,10 +135,10 @@ class Chaturbate(object):
         :return: A dict with statistics about the recording.
         :rtype: dict
         """
-        file_size = os.path.getsize(proc['filename'])
+        file_size = int(os.path.getsize(proc['filename']))
         return {
             'file_size': file_size,
-            'formatted_file_size': size(file_size),
+            'formatted_file_size': Chaturbate.get_human_size(file_size),
             'started_at': time.strftime(
                 "%H:%M", time.localtime(proc['time'])),
             'recording_time': str(
