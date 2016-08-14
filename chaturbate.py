@@ -13,6 +13,7 @@ The requirements are:
 """
 
 import subprocess
+from subprocess import STDOUT
 import re
 import urllib
 import time
@@ -450,8 +451,10 @@ class Chaturbate(object):
 
         args = [item for sublist in args for item in sublist]
 
-        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        output, error = proc.communicate()
+        DEVNULL = open(os.devnull, 'wb')
+        proc = subprocess.Popen(args, stdout=DEVNULL, stderr=STDOUT)
+        #proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        #output, error = proc.communicate()
 
         self.processes.append(
             {
