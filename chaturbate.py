@@ -200,8 +200,7 @@ class Chaturbate(object):
                 continue
 
             # if the status message is "OFFLINE", then who am i to doubt it
-            status = model.find('div', {'class': 'thumbnail_label'}).text
-            if status == "OFFLINE":
+            if model.find('div', {'class': 'thumbnail_label_offline'}):
                 continue
 
             models.append(name)
@@ -218,7 +217,11 @@ class Chaturbate(object):
         :return: True if successful, False otherwise.
         :rtype: bool
         """
-        return model in [proc['model'] for proc in self.processes]
+        for process in self.processes:
+            if process['model'] == model and process['type'] == 'rtmpdump':
+                return True
+
+        return False
 
     def process_models(self, models):
         """Processes a list that has the online models and starts capturing them.
