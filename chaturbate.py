@@ -11,7 +11,6 @@ The requirements are:
  * BeautifulSoup - https://www.crummy.com/software/BeautifulSoup/
  * requests - http://docs.python-requests.org/en/master/
  * hurry.filesize - https://pypi.python.org/pypi/hurry.filesize/
- * pushbullet.py - https://github.com/randomchars/pushbullet.py (optional)
 """
 
 import subprocess
@@ -42,13 +41,11 @@ class Chaturbate(object):
     """A list with all the started/running processes."""
     logger = None
     """An instance of the python logger."""
-    push_bullet = None
-    """An instance of a pushbullet object."""
     config_parser = None
 
     def __init__(self):
         """
-        Configures logging, reads configuration and tries to enable pushbullet
+        Configures logging, reads configuration
         """
 
         # configure logging
@@ -66,16 +63,6 @@ class Chaturbate(object):
         # read configuration
         self.config_parser = ConfigParser.ConfigParser()
         self.config_parser.read("config.ini")
-
-        # is pushbullet is enabled on the config
-        if self.config_parser.get('PushBullet', 'enable') == 'true':
-            # try to import it and connect
-            try:
-                import pushbullet
-                self.push_bullet = pushbullet.Pushbullet(
-                    self.config_parser.get('PushBullet', 'access_token'))
-            except (ImportError, pushbullet.InvalidKeyError):
-                self.push_bullet = None
 
         # create a requests object that has sessions
         self.req = requests.Session()
@@ -286,8 +273,6 @@ class Chaturbate(object):
 
         message = "Capturing " + filename
         self.logger.info(message)
-        if self.push_bullet is not None:
-            self.push_bullet.push_note("Chaturbate", message)
 
         filename = os.path.join(directory, filename)
 
@@ -334,8 +319,6 @@ class Chaturbate(object):
                                        "Duration:" +
                                        proc_stats['recording_time'])
                             self.logger.info(message)
-                            if self.push_bullet is not None:
-                                self.push_bullet.push_note("Chaturbate", message)
                 elif proc['type'] == 'ffmpeg':
                     if proc['proc'].poll() == 0:
                         os.remove(proc['source'])
@@ -451,12 +434,11 @@ class Chaturbate(object):
 
     def run_ffmpeg(self, model, source, destination):
         args = [
-                ['ffmpeg', '-i', source],
-                self.config_parser.get('FFmpeg', 'options').split(),
-                [destination]
-                ]
+            ['ffmpeg', '-i', source],
+            self.config_parser.get('FFmpeg', 'options').split(),
+            [destination]
+            ]
 
- 
         args = [item for sublist in args for item in sublist]
 
         proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

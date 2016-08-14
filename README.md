@@ -19,7 +19,6 @@ You'll have to install this rtmpdump version from source.
 * [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/) - To parse the HTML.
 * [hurry.filesize](https://pypi.python.org/pypi/hurry.filesize/) - To get pretty formatted file sizes.
 * [requests](http://docs.python-requests.org/en/master/) - To make requests and keep the session.
-* [pushbullet.py](https://github.com/randomchars/pushbullet.py) - To send notifications (optional).
 
 These three can be installed with pip (see below).
 
