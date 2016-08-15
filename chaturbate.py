@@ -36,7 +36,7 @@ class Chaturbate(object):
     req = None
     """The requests object with sessions."""
     processes = []
-    """A list with all the started/running processes."""
+    """A list with all the processes."""
     logger = None
     """An instance of the python logger."""
     config_parser = None
@@ -436,13 +436,14 @@ class Chaturbate(object):
         flv = source.replace(self.config_parser.get('Directories', 'capturing') + os.sep,
                              self.config_parser.get('Directories', 'complete') + os.sep)
         os.rename(source, flv)
-        mp4 = flv.replace(".flv", ".mp4")
 
         if self.config_parser.get('FFmpeg', 'enable') == "true":
+            mp4 = flv.replace(".flv", ".mp4")
             self.run_ffmpeg(proc['model'], flv, mp4)
 
     def run_ffmpeg(self, model, source, destination):
         args = [
+            ["nice", "-n", "19"],
             ['ffmpeg', '-i', source],
             self.config_parser.get('FFmpeg', 'options').split(),
             [destination]
@@ -452,8 +453,6 @@ class Chaturbate(object):
 
         DEVNULL = open(os.devnull, 'wb')
         proc = subprocess.Popen(args, stdout=DEVNULL, stderr=subprocess.STDOUT)
-        #proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        #output, error = proc.communicate()
 
         self.processes.append(
             {
