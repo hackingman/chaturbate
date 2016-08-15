@@ -50,7 +50,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'chaturbate'
+project = u'Chaturbate'
 copyright = u'2016, Pedro de Oliveira'
 author = u'Pedro de Oliveira'
 
@@ -226,7 +226,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'chaturbate.tex', u'chaturbate Documentation',
+    (master_doc, 'chaturbate.tex', u'Chaturbate Documentation',
      u'Pedro de Oliveira', 'manual'),
 ]
 
@@ -256,7 +256,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'chaturbate', u'chaturbate Documentation',
+    (master_doc, 'chaturbate', u'Chaturbate Documentation',
      [author], 1)
 ]
 
@@ -270,7 +270,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'chaturbate', u'chaturbate Documentation',
+    (master_doc, 'chaturbate', u'Chaturbate Documentation',
      author, 'chaturbate', 'One line description of project.',
      'Miscellaneous'),
 ]
