@@ -33,13 +33,14 @@ class Chaturbate(object):
     """The username read from the config."""
     password = ''
     """The password read from the config."""
-    req = None
-    """The requests object with sessions."""
     processes = []
     """A list with all the processes."""
+    req = None
+    """An instance of the requests class."""
     logger = None
-    """An instance of the python logger."""
+    """An instance of the Python logger."""
     config_parser = None
+    """An instance of the ConfigParser."""
 
     def __init__(self):
         """
@@ -70,6 +71,12 @@ class Chaturbate(object):
 
     @staticmethod
     def get_human_size(nbytes):
+        """Returns file size in a human readable format
+
+        :param int nbytes: File size in bytes
+        :return: Pretty file size
+        :rtype: str
+        """
         suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
         if nbytes == 0: return '0 B'
         i = 0
@@ -266,7 +273,7 @@ class Chaturbate(object):
     def capture(self, info):
         """Capture a stream.
 
-        After running the rtmpdump process this adds some information about it to the :data:`processes` list.
+        Starts a rtmpdump process, and adds information about it to the :data:`processes` list.
 
         :param info list: A list with all the rtmp info, generated in :func:`get_model_info`.
         """
@@ -298,10 +305,11 @@ class Chaturbate(object):
             })
 
     def check_running(self):
-        """Checks if the processes are still running.
+        """Processes the :data:`processes` list.
 
-        This function checks if the :data:`processes` are still running.
-        If they arent, remove them from the list.
+        Checks if the rtmpdump is still running, if isn't remove it from list.
+
+        Also checks if ffmpeg exited correctly and deletes flv file.
         """
         remove = []
 
@@ -405,7 +413,7 @@ class Chaturbate(object):
     def is_private(self, info):
         """Checks if a stream is private.
 
-        Runs rtmpdump for 10 seconds and checks if the file size is > 0.
+        Runs rtmpdump for 5 seconds and checks if the file size is > 0.
 
         :param list info: A list with all the rtmp info, generated in :func:`get_model_info`.
 
@@ -427,6 +435,12 @@ class Chaturbate(object):
         return result
 
     def move_to_complete(self, proc):
+        """Moves the recorded file to the completed path.
+
+        If ffmpeg postprocessing is enabled, its called after the move.
+
+        :param proc dict: A dict with information about a rtmpdump process, generated in :func:`capture`.
+        """
         directory = self.config_parser.get('Directories', 'complete')
 
         if os.path.isdir(directory) is False:
@@ -442,6 +456,12 @@ class Chaturbate(object):
             self.run_ffmpeg(proc['model'], flv, mp4)
 
     def run_ffmpeg(self, model, source, destination):
+        """Executes ffmpeg to postprocess recording.
+
+        :param model str: Model name.
+        :param source str: Source file, normally the flv file.
+        :param destination str: Destination file, normally a mp4.
+        """
         args = [
             ["nice", "-n", "19"],
             ['ffmpeg', '-i', source],
