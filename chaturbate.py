@@ -27,12 +27,12 @@ from bs4 import BeautifulSoup
 
 class Chaturbate(object):
     """
-    All-in-one class to record Chaturbate streams.
+    Script to record Chaturbate streams.
     """
-    username = ''
-    """The username read from the config."""
-    password = ''
-    """The password read from the config."""
+    username = None
+    """The username from the config."""
+    password = None
+    """The password from the config."""
     processes = []
     """A list with all the processes."""
     req = None
@@ -70,30 +70,28 @@ class Chaturbate(object):
         self.password = self.config_parser.get('User', 'password')
 
     @staticmethod
-    def get_human_size(bytes):
-        """Returns file size in a human readable format.
+    def get_human_size(size):
+        """
+        Returns file size in a human readable format.
 
-        :param int bytes: File size in bytes
-        :return: Pretty file size
+        :param int size: File size in bytes.
+        :return: Pretty file size.
         :rtype: str
         """
         suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
-        if bytes == 0:
+        if size == 0:
             return '0 B'
         i = 0
-        while bytes >= 1024 and i < len(suffixes)-1:
-            bytes /= 1024.
+        while size >= 1024 and i < len(suffixes)-1:
+            size /= 1024.
             i += 1
-        f = ('%.2f' % bytes).rstrip('0').rstrip('.')
+        f = ('%.2f' % size).rstrip('0').rstrip('.')
         return '%s %s' % (f, suffixes[i])
 
     @staticmethod
     def is_logged(html):
-        """Checks if you're currently logged in.
-
-        Searches the HTML with BeautifulSoup to see if there is a
-        <div id='user_information'> in it.
-        If its found then we are logged in.
+        """
+        Checks if you're currently logged in.
 
         :param str html: The HTML source to check.
 
@@ -107,85 +105,90 @@ class Chaturbate(object):
         return True
 
     @staticmethod
-    def run_rtmpdump(rtmp_info, output_filename, extra_argument=""):
-        """Runs rtmpdump with the provided parameters.
+    def run_rtmpdump(flv_info, output_filename, extra_argument=""):
+        """
+        Runs rtmpdump with the provided parameters.
 
-        :param list rtmp_info: A list with all the rtmp info, generated in :func:`get_model_info`.
+        :param list flv_info: A list with all the flv variables.
         :param str output_filename: Filename where to output the stream.
         :param str extra_argument: Extra argument to pass to rtmpdump.
 
         :return: A Popen object (process).
         :rtype: Popen
         """
-        args = [
+        arguments = [
             "rtmpdump",
             "--quiet",
             "--live",
             extra_argument,
-            "--rtmp", "rtmp://" + rtmp_info[2] + "/live-edge",
-            "--pageUrl", "http://chaturbate.com/" + rtmp_info[1],
-            "--conn", "S:" + rtmp_info[8],
-            "--conn", "S:" + rtmp_info[1],
+            "--rtmp", "rtmp://" + flv_info[2] + "/live-edge",
+            "--pageUrl", "http://chaturbate.com/" + flv_info[1],
+            "--conn", "S:" + flv_info[8],
+            "--conn", "S:" + flv_info[1],
             "--conn", "S:2.645",
-            "--conn", "S:" + urllib.unquote(rtmp_info[15]),
+            "--conn", "S:" + urllib.unquote(flv_info[15]),
             "--token", "m9z#$dO0qe34Rxe@sMYxx",
             "--playpath", "playpath",
             "--flv", output_filename
         ]
 
-        return subprocess.Popen(args)
+        return subprocess.Popen(arguments)
 
     @staticmethod
-    def get_process_stats(process):
-        """Generates a dict with various info about the file being captured.
+    def get_process_stats(process_info):
+        """
+        Generates various info about the file being captured.
 
-        :param dict process: A dict with information about a rtmpdump process, generated in :func:`capture`.
+        :param dict process_info: Information about the rtmpdump process.
 
-        :return: A dict with statistics about the recording.
+        :return: Statistics about the recording.
         :rtype: dict
         """
-        file_size = int(os.path.getsize(process['filename']))
+        file_size = int(os.path.getsize(process_info['filename']))
         return {
             'file_size': file_size,
             'formatted_file_size': Chaturbate.get_human_size(file_size),
             'started_at': time.strftime(
-                "%H:%M", time.localtime(process['time'])),
+                "%H:%M", time.localtime(process_info['time'])),
             'recording_time': str(
-                timedelta(seconds=int(time.time()) - process['time']))
+                timedelta(seconds=int(time.time()) - process_info['time']))
             }
 
     def make_request(self, url):
-        """Does a GET request and returns the HTML content.
+        """
+        Does a GET request and returns the HTML content.
 
         :param str url: The URL to open.
 
         :return: The HTML source of the requested URL.
         :rtype: str
         """
-        result = None
+        request = None
 
-        while result is None:
+        while request is None:
             try:
-                result = self.req.get(url)
+                request = self.req.get(url)
             except requests.exceptions.ConnectionError:
-                result = None
+                request = None
 
-            while (result is not None) and (self.is_logged(result.text) is False):
+            while (request is not None) and \
+                    (self.is_logged(request.text) is False):
                 self.logger.warning("Not logged in")
                 self.login()
                 try:
-                    result = self.req.get(url)
+                    request = self.req.get(url)
                 except requests.exceptions.ConnectionError:
-                    result = None
+                    request = None
 
-        return result.text
+        return request.text
 
     def get_online_models(self):
-        """Return a list with the models you follow that are online.
+        """
+        Return a list with the models you follow that are online.
 
         This function ignores (or tries to) private shows, and offline models.
 
-        :return: A list with the online models name.
+        :return: Online models name.
         :rtype: list
         """
         url = 'https://chaturbate.com/followed-cams/'
@@ -197,25 +200,23 @@ class Chaturbate(object):
             'ul', {'class': 'list'}).findAll('li', recursive=False)
 
         for model in models_li:
-            name = model.find('a')['href'].replace('/', '')
+            model_name = model.find('a')['href'].replace('/', '')
 
-            # it seems that when <div class='thumbnail_label_c_private_show'>
-            # exists on the model <li> then the show is private
-            if model.find('div', {'class': 'thumbnail_label_c_private_show'}):
-                continue
-
-            # if the status message is "OFFLINE", then who am i to doubt it
+            # ignore offline
             if model.find('div', {'class': 'thumbnail_label_offline'}):
                 continue
 
-            models.append(name)
+            # ignore private shows
+            if model.find('div', {'class': 'thumbnail_label_c_private_show'}):
+                continue
+
+            models.append(model_name)
 
         return models
 
     def is_recording(self, model_name):
-        """Checks if a model is already being recorded.
-
-        Checks if the parameter is already in the :data:`processes` list.
+        """
+        Checks if a model is already being recorded.
 
         :param str model_name: The model name to check.
 
@@ -223,22 +224,24 @@ class Chaturbate(object):
         :rtype: bool
         """
         for process in self.processes:
-            if process['model'] == model_name and process['type'] == 'rtmpdump':
+            if process['model'] == model_name and \
+                            process['type'] == 'rtmpdump':
                 return True
 
         return False
 
     def process_models(self, models):
-        """Processes a list that has the online models and starts capturing them.
+        """
+        Processes a list that has the online models and starts capturing them.
 
-        :param list models: The models list generated in :func:`get_online_models`.
+        :param list models: The models.
         """
         for model in models:
             # already recording it, ignore
             if self.is_recording(model) is True:
                 continue
             self.logger.info("Model " + model + " is chaturbating")
-            info = self.get_model_info(model)
+            info = self.get_flv_info(model)
             # if the embed info was scrapped
             if len(info) > 0:
                 # check if the show is private
@@ -247,37 +250,39 @@ class Chaturbate(object):
                 else:
                     self.logger.warning("But the show is private")
 
-    def get_model_info(self, model_name):
-        """Generates a list with all EmbedViewerSwf variables from the HTML.
+    def get_flv_info(self, model_name):
+        """
+        Generates a list with all EmbedViewerSwf variables from the HTML.
 
         :param str model_name: The model name to get info.
 
-        :return: A list with all information from the FLV player.
+        :return: Information from the FLV player.
         :rtype: list
         """
         url = "https://chaturbate.com/" + model_name + "/"
         html = self.make_request(url)
 
-        info = []
+        flv_info = []
 
         embed = re.search(r"EmbedViewerSwf\(*(.+?)\);", html, re.DOTALL)
         if embed is None:
             self.logger.warning('Cant find embed')
-            return info
+            return flv_info
 
         for line in embed.group(1).split("\n"):
             data = re.search(r" +[\"'](.*)?[\"'],", line)
             if data:
-                info.append(data.group(1))
+                flv_info.append(data.group(1))
 
-        return info
+        return flv_info
 
-    def capture(self, rtmp_info):
-        """Capture a stream.
+    def capture(self, flv_info):
+        """
+        Capture a stream.
 
-        Starts rtmpdump and adds information about it to the :data:`processes` list.
+        Starts rtmpdump and adds information to the :data:`processes` list.
 
-        :param list rtmp_info : A list with all the rtmp info, generated in :func:`get_model_info`.
+        :param list flv_info: A list with all the flv info.
         """
         directory = self.config_parser.get('Directories', 'capturing')
 
@@ -286,7 +291,7 @@ class Chaturbate(object):
 
         date_time = datetime.now()
 
-        filename = ("Chaturbate_" + rtmp_info[1] +
+        filename = ("Chaturbate_" + flv_info[1] +
                     date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv")
 
         message = "Capturing " + filename
@@ -294,73 +299,83 @@ class Chaturbate(object):
 
         filename = os.path.join(directory, filename)
 
-        proc = self.run_rtmpdump(rtmp_info, filename)
+        process = self.run_rtmpdump(flv_info, filename)
 
         self.processes.append(
             {
-                'id': 'rtmp-' + rtmp_info[1],
+                'id': 'rtmp-' + flv_info[1],
                 'type': 'rtmpdump',
-                'model': rtmp_info[1],
+                'model': flv_info[1],
                 'filename': filename,
                 'time': int(time.time()),
-                'proc': proc,
+                'proc': process,
             })
 
+    def clean_rtmpdump(self, process_info):
+        """
+        Processes the flv after rtmpdump stops.
+
+        :param dict process_info: Information about the rtmpdump process.
+        """
+        self.logger.info(
+            process_info['model'] + " is no longer being captured")
+        if os.path.isfile(process_info['filename']):
+            process_stats = self.get_process_stats(process_info)
+            if process_stats['file_size'] == 0:
+                self.logger.warning("Capture size is 0kb, deleting.")
+                os.remove(process_info['filename'])
+            else:
+                self.move_to_complete(process_info)
+                message = ("Finished:" +
+                           process_info['model'] + " - " +
+                           "Started at " +
+                           process_stats['started_at'] + " | " +
+                           "Size:" +
+                           process_stats['formatted_file_size'] + " | " +
+                           "Duration:" +
+                           process_stats['recording_time'])
+                self.logger.info(message)
+
     def is_running(self):
-        """Processes the :data:`processes` list.
+        """
+        Checks if a process is still running, if isn't remove it from list.
 
-        Checks if the rtmpdump is still running, if isn't remove it from list.
-
-        Also checks if ffmpeg exited correctly and deletes flv file.
+        If ffmpeg exited correctly, deletes the flv file.
         """
         remove = []
 
         # iterate over all "running" processes
-        for proc in self.processes:
+        for process in self.processes:
             # if the process has stopped
-            if proc['proc'].poll() is not None:
-                if proc['type'] == 'rtmpdump':
-                    self.logger.info(
-                        proc['model'] + " is no longer being captured")
-                    if os.path.isfile(proc['filename']):
-                        proc_stats = self.get_process_stats(proc)
-                        if proc_stats['file_size'] == 0:
-                            self.logger.warning("Capture size is 0kb, deleting.")
-                            os.remove(proc['filename'])
-                        else:
-                            self.move_to_complete(proc)
-                            message = ("Finished:" +
-                                       proc['model'] + " - " +
-                                       "Started at " +
-                                       proc_stats['started_at'] + " | " +
-                                       "Size:" +
-                                       proc_stats['formatted_file_size'] + " | " +
-                                       "Duration:" +
-                                       proc_stats['recording_time'])
-                            self.logger.info(message)
-                elif proc['type'] == 'ffmpeg':
-                    if proc['proc'].poll() == 0:
-                        os.remove(proc['source'])
+            if process['proc'].poll() is not None:
+                if process['type'] == 'rtmpdump':
+                    self.clean_rtmpdump(process)
+                elif process['type'] == 'ffmpeg':
+                    if process['proc'].poll() == 0:
+                        os.remove(process['source'])
                     else:
-                        self.logger.warning("Something went wrong with ffmpeg, not deleting")
+                        self.logger.warning(
+                            "Something went wrong with ffmpeg, not deleting")
 
-                remove.append(proc['id'])
+                remove.append(process['id'])
 
         # remove all items in remove from self.processes
-        procs = self.processes
+        temp_processes = self.processes
         for item in remove:
-            procs = [f for f in procs if f['id'] != item]
-        self.processes = procs
+            temp_processes = [f for f in temp_processes if f['id'] != item]
+        self.processes = temp_processes
 
     def kill_processes(self):
-        """Kills all child processes, used when ^C is pressed.
         """
-        for proc in self.processes:
-            if proc['proc'].poll() is not None:
-                proc['proc'].terminate()
+        Kills all child processes, used when ^C is pressed.
+        """
+        for process in self.processes:
+            if process['proc'].poll() is not None:
+                process['proc'].terminate()
 
     def login(self):
-        """Performs the login on the site.
+        """
+        Performs the login on the site.
         """
         self.logger.info("Logging in...")
         url = 'https://chaturbate.com/auth/login/'
@@ -385,7 +400,8 @@ class Chaturbate(object):
             return True
 
     def do_cycle(self):
-        """Does a full cycle.
+        """
+        Does a full cycle.
 
         * Checks the processes.
         * Gets online models.
@@ -393,19 +409,39 @@ class Chaturbate(object):
         """
         c.is_running()
         online_models = self.get_online_models()
-        if len(online_models) > 0:
-            self.process_models(online_models)
-        self.print_recording()
+        self.process_models(online_models)
+        # self.print_recording()
+        self.print_status()
+
+    def print_status(self):
+        """
+        Prints number of rtmpdump and ffmpeg processes running.
+        """
+        capturing = 0
+        processing = 0
+
+        for process in self.processes:
+            if process['type'] == 'rtmpdump':
+                capturing = capturing + 1
+            if process['type'] == 'ffmpeg':
+                processing = processing + 1
+
+        message = ("Capturing: " + str(capturing) +
+                   ", Processing: " + str(processing))
+
+        self.logger.info(message)
 
     def print_recording(self):
-        """Print statistics about cams being recorded.
         """
-        for proc in self.processes:
-            if proc['type'] == 'rtmpdump' and os.path.isfile(proc['filename']):
-                proc_stats = self.get_process_stats(proc)
+        Print statistics about cams being recorded.
+        """
+        for process in self.processes:
+            if process['type'] == 'rtmpdump' and \
+                    os.path.isfile(process['filename']):
+                proc_stats = self.get_process_stats(process)
                 if proc_stats['file_size'] > 0:
                     message = ("Recording: " +
-                               proc['model'] + " - " +
+                               process['model'] + " - " +
                                "Duration: " +
                                proc_stats['recording_time'] + " - " +
                                "Size: " +
@@ -413,11 +449,12 @@ class Chaturbate(object):
                     self.logger.info(message)
 
     def is_private(self, rtmp_info):
-        """Checks if a stream is private.
+        """
+        Checks if a stream is private.
 
         Runs rtmpdump for 5 seconds and checks if the file size is > 0.
 
-        :param list rtmp_info: A list with all the rtmp info, generated in :func:`get_model_info`.
+        :param list rtmp_info: A list with all the rtmp info.
 
         :return: True if private, False otherwise.
         :rtype: bool
@@ -426,7 +463,8 @@ class Chaturbate(object):
         seconds = 5
 
         file_name = "test.flv"
-        proc = self.run_rtmpdump(rtmp_info, file_name, extra_argument="-B " + str(seconds))
+        proc = self.run_rtmpdump(
+            rtmp_info, file_name, extra_argument="-B " + str(seconds))
         proc.wait()
 
         if os.path.isfile(file_name):
@@ -437,11 +475,12 @@ class Chaturbate(object):
         return result
 
     def move_to_complete(self, process):
-        """Moves the recorded file to the completed path.
+        """
+        Moves the recorded file to the completed path.
 
         If ffmpeg postprocessing is enabled, its called after the move.
 
-        :param dict process: A dict with information about a rtmpdump process, generated in :func:`capture`.
+        :param dict process: A dict with information about a rtmpdump process.
         """
         directory = self.config_parser.get('Directories', 'complete')
 
@@ -449,8 +488,9 @@ class Chaturbate(object):
             os.mkdir(directory)
 
         source = process['filename']
-        flv = source.replace(self.config_parser.get('Directories', 'capturing') + os.sep,
-                             self.config_parser.get('Directories', 'complete') + os.sep)
+        flv = source.replace(
+            self.config_parser.get('Directories', 'capturing') + os.sep,
+            self.config_parser.get('Directories', 'complete') + os.sep)
         os.rename(source, flv)
 
         if self.config_parser.get('FFmpeg', 'enable') == "true":
@@ -458,7 +498,8 @@ class Chaturbate(object):
             self.run_ffmpeg(process['model'], flv, mp4)
 
     def run_ffmpeg(self, model_name, source_fn, destination_fn):
-        """Executes ffmpeg to postprocess recording.
+        """
+        Executes ffmpeg to postprocess recording.
 
         :param str model_name: Model name.
         :param str source_fn: Source file, normally the flv file.
