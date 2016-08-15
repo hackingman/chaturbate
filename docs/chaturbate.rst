@@ -1,5 +1,5 @@
-chaturbate module
-=================
+chaturbate.py code
+==================
 
 .. automodule:: chaturbate
     :members:
