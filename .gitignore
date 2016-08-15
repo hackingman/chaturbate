@@ -1,7 +1,4 @@
-docs/_build/doctrees
-docs/_build/html
-docs/chaturbate.rst
-docs/modules.rst
-config.ini
+docs/build
+*.ini
 *.pyc
 *.flv
