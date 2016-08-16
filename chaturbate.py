@@ -35,11 +35,11 @@ class Chaturbate(object):
     """The password from the config."""
     processes = []
     """A list with all the processes."""
-    req = None
+    request = None
     """An instance of the requests class."""
-    logger = None
+    log = None
     """An instance of the Python logger."""
-    config_parser = None
+    config = None
     """An instance of the ConfigParser."""
 
     def __init__(self):
@@ -50,30 +50,30 @@ class Chaturbate(object):
         # configure logging
         logging.getLogger("requests").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
-        self.logger = logging.getLogger("chaturbate")
-        self.logger.setLevel(logging.DEBUG)
+        self.log = logging.getLogger("chaturbate")
+        self.log.setLevel(logging.DEBUG)
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.DEBUG)
         formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s",
                                       "%Y-%m-%d %H:%M:%S")
         console_handler.setFormatter(formatter)
-        self.logger.addHandler(console_handler)
+        self.log.addHandler(console_handler)
 
         # read configuration
         config_fn = "config.ini"
 
         if not os.path.exists(config_fn):
-            self.logger.error("{} not found".format(config_fn))
+            self.log.error("%s not found", config_fn)
             sys.exit()
 
-        self.config_parser = ConfigParser.ConfigParser()
-        self.config_parser.read(config_fn)
+        self.config = ConfigParser.ConfigParser()
+        self.config.read(config_fn)
 
         # create a requests object that has sessions
-        self.req = requests.Session()
+        self.request = requests.Session()
 
-        self.username = self.config_parser.get('User', 'username')
-        self.password = self.config_parser.get('User', 'password')
+        self.username = self.config.get('User', 'username')
+        self.password = self.config.get('User', 'password')
 
     @staticmethod
     def get_human_size(size):
@@ -173,16 +173,16 @@ class Chaturbate(object):
 
         while request is None:
             try:
-                request = self.req.get(url)
+                request = self.request.get(url)
             except requests.exceptions.ConnectionError:
                 request = None
 
             while (request is not None) and \
                     (self.is_logged(request.text) is False):
-                self.logger.warning("Not logged in")
+                self.log.warning("Not logged in")
                 self.login()
                 try:
-                    request = self.req.get(url)
+                    request = self.request.get(url)
                 except requests.exceptions.ConnectionError:
                     request = None
 
@@ -246,7 +246,7 @@ class Chaturbate(object):
             # already recording it, ignore
             if self.is_recording(model) is True:
                 continue
-            self.logger.info("Model " + model + " is chaturbating")
+            self.log.info("Model " + model + " is chaturbating")
             info = self.get_flv_info(model)
             # if the embed info was scrapped
             if len(info) > 0:
@@ -254,7 +254,7 @@ class Chaturbate(object):
                 if self.is_private(info) is False:
                     self.capture(info)
                 else:
-                    self.logger.warning("But the show is private")
+                    self.log.warning("But the show is private")
 
     def get_flv_info(self, model_name):
         """
@@ -272,7 +272,7 @@ class Chaturbate(object):
 
         embed = re.search(r"EmbedViewerSwf\(*(.+?)\);", html, re.DOTALL)
         if embed is None:
-            self.logger.warning('Cant find embed')
+            self.log.warning('Cant find embed')
             return flv_info
 
         for line in embed.group(1).split("\n"):
@@ -290,7 +290,7 @@ class Chaturbate(object):
 
         :param list flv_info: A list with all the flv info.
         """
-        directory = self.config_parser.get('Directories', 'capturing')
+        directory = self.config.get('Directories', 'capturing')
 
         if os.path.isdir(directory) is False:
             os.mkdir(directory)
@@ -301,7 +301,7 @@ class Chaturbate(object):
                     date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv")
 
         message = "Capturing " + filename
-        self.logger.info(message)
+        self.log.info(message)
 
         filename = os.path.join(directory, filename)
 
@@ -323,12 +323,12 @@ class Chaturbate(object):
 
         :param dict process_info: Information about the rtmpdump process.
         """
-        self.logger.info(
+        self.log.info(
             process_info['model'] + " is no longer being captured")
         if os.path.isfile(process_info['filename']):
             process_stats = self.get_process_stats(process_info)
             if process_stats['file_size'] == 0:
-                self.logger.warning("Capture size is 0kb, deleting.")
+                self.log.warning("Capture size is 0kb, deleting.")
                 os.remove(process_info['filename'])
             else:
                 self.move_to_complete(process_info)
@@ -340,7 +340,7 @@ class Chaturbate(object):
                            process_stats['formatted_file_size'] + " | " +
                            "Duration:" +
                            process_stats['recording_time'])
-                self.logger.info(message)
+                self.log.info(message)
 
     def is_running(self):
         """
@@ -360,7 +360,7 @@ class Chaturbate(object):
                     if process['proc'].poll() == 0:
                         os.remove(process['source'])
                     else:
-                        self.logger.warning(
+                        self.log.warning(
                             "Something went wrong with ffmpeg, not deleting")
 
                 remove.append(process['id'])
@@ -383,24 +383,24 @@ class Chaturbate(object):
         """
         Performs the login on the site.
         """
-        self.logger.info("Logging in...")
+        self.log.info("Logging in...")
         url = 'https://chaturbate.com/auth/login/'
-        result = self.req.get(url)
+        result = self.request.get(url)
 
         soup = BeautifulSoup(result.text, "html.parser")
         csrf = soup.find('input', {'name': 'csrfmiddlewaretoken'}).get('value')
 
-        result = self.req.post(url,
-                               data={
-                                   'username': self.username,
-                                   'password': self.password,
-                                   'csrfmiddlewaretoken': csrf
-                               },
-                               cookies=result.cookies,
-                               headers={'Referer': url})
+        result = self.request.post(url,
+                                   data={
+                                       'username': self.username,
+                                       'password': self.password,
+                                       'csrfmiddlewaretoken': csrf
+                                   },
+                                   cookies=result.cookies,
+                                   headers={'Referer': url})
 
         if self.is_logged(result.text) is False:
-            self.logger.warning("Could not login")
+            self.log.warning("Could not login")
             return False
         else:
             return True
@@ -435,7 +435,7 @@ class Chaturbate(object):
         message = ("Capturing: " + str(capturing) +
                    ", Processing: " + str(processing))
 
-        self.logger.info(message)
+        self.log.info(message)
 
     def print_recording(self):
         """
@@ -452,7 +452,7 @@ class Chaturbate(object):
                                proc_stats['recording_time'] + " - " +
                                "Size: " +
                                proc_stats['formatted_file_size'])
-                    self.logger.info(message)
+                    self.log.info(message)
 
     def is_private(self, rtmp_info):
         """
@@ -488,18 +488,18 @@ class Chaturbate(object):
 
         :param dict process: A dict with information about a rtmpdump process.
         """
-        directory = self.config_parser.get('Directories', 'complete')
+        directory = self.config.get('Directories', 'complete')
 
         if os.path.isdir(directory) is False:
             os.mkdir(directory)
 
         source = process['filename']
         flv = source.replace(
-            self.config_parser.get('Directories', 'capturing') + os.sep,
-            self.config_parser.get('Directories', 'complete') + os.sep)
+            self.config.get('Directories', 'capturing') + os.sep,
+            self.config.get('Directories', 'complete') + os.sep)
         os.rename(source, flv)
 
-        if self.config_parser.get('FFmpeg', 'enable') == "true":
+        if self.config.get('FFmpeg', 'enable') == "true":
             mp4 = flv.replace(".flv", ".mp4")
             self.run_ffmpeg(process['model'], flv, mp4)
 
@@ -514,7 +514,7 @@ class Chaturbate(object):
         args = [
             ["nice", "-n", "19"],
             ['ffmpeg', '-i', source_fn],
-            self.config_parser.get('FFmpeg', 'options').split(),
+            self.config.get('FFmpeg', 'options').split(),
             [destination_fn]
             ]
 
