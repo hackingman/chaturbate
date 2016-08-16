@@ -60,8 +60,14 @@ class Chaturbate(object):
         self.logger.addHandler(console_handler)
 
         # read configuration
+        config_fn = "config.ini"
+
+        if not os.path.exists(config_fn):
+            self.logger.error("{} not found".format(config_fn))
+            sys.exit()
+
         self.config_parser = ConfigParser.ConfigParser()
-        self.config_parser.read("config.ini")
+        self.config_parser.read(config_fn)
 
         # create a requests object that has sessions
         self.req = requests.Session()
