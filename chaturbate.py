@@ -29,23 +29,29 @@ class Chaturbate(object):
     """
     Script to record Chaturbate streams.
     """
-    username = None
-    """The username from the config."""
-    password = None
-    """The password from the config."""
     processes = []
     """A list with all the processes."""
     request = None
     """An instance of the requests class."""
     log = None
     """An instance of the Python logger."""
-    config = None
-    """An instance of the ConfigParser."""
+    config = {
+        'username': None,
+        'password': None,
+        'capturing_path': None,
+        'completed_path': None,
+        'debug': None,
+        'ffmpeg': None,
+        'ffmpeg-flags': None,
+    }
+    """Configuration"""
 
     def __init__(self):
         """
         Configures logging, reads configuration
         """
+        # create a requests object with sessions
+        self.request = requests.Session()
 
         # configure logging
         logging.getLogger("requests").setLevel(logging.WARNING)
@@ -66,14 +72,28 @@ class Chaturbate(object):
             self.log.error("%s not found", config_fn)
             sys.exit()
 
-        self.config = ConfigParser.ConfigParser()
-        self.config.read(config_fn)
+        config = ConfigParser.ConfigParser()
+        config.read(config_fn)
 
-        # create a requests object that has sessions
-        self.request = requests.Session()
+        self.config['username'] = config.get('User', 'username')
+        self.config['password'] = config.get('User', 'password')
 
-        self.username = self.config.get('User', 'username')
-        self.password = self.config.get('User', 'password')
+        self.config['ffmpeg'] = config.get('FFmpeg', 'enable')
+        self.config['ffmpeg-flags'] = config.get('FFmpeg', 'options')
+
+        try:
+            self.config['debug'] = config.get('Debug', 'enable')
+        except ConfigParser.NoSectionError:
+            pass
+
+        # Create directories
+        self.config['capturing_path'] = config.get('Directories', 'capturing')
+        self.config['completed_path'] = config.get('Directories', 'complete')
+
+        if os.path.isdir(self.config['capturing_path']) is False:
+            os.mkdir(self.config['capturing_path'])
+        if os.path.isdir(self.config['completed_path']) is False:
+            os.mkdir(self.config['completed_path'])
 
     @staticmethod
     def get_human_size(size):
@@ -82,6 +102,7 @@ class Chaturbate(object):
 
         :param int size: File size in bytes.
         :return: Pretty file size.
+
         :rtype: str
         """
         suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -101,7 +122,6 @@ class Chaturbate(object):
 
         :param str html: The HTML source to check.
 
-        :return: True if successful, False otherwise.
         :rtype: bool
         """
         soup = BeautifulSoup(html, "html.parser")
@@ -226,7 +246,6 @@ class Chaturbate(object):
 
         :param str model_name: The model name to check.
 
-        :return: True if successful, False otherwise.
         :rtype: bool
         """
         for process in self.processes:
@@ -290,20 +309,13 @@ class Chaturbate(object):
 
         :param list flv_info: A list with all the flv info.
         """
-        directory = self.config.get('Directories', 'capturing')
-
-        if os.path.isdir(directory) is False:
-            os.mkdir(directory)
-
         date_time = datetime.now()
 
         filename = ("Chaturbate_" + flv_info[1] +
                     date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv")
+        self.log.info("Capturing %s", filename)
 
-        message = "Capturing " + filename
-        self.log.info(message)
-
-        filename = os.path.join(directory, filename)
+        filename = os.path.join(self.config['capturing_path'], filename)
 
         process = self.run_rtmpdump(flv_info, filename)
 
@@ -323,8 +335,7 @@ class Chaturbate(object):
 
         :param dict process_info: Information about the rtmpdump process.
         """
-        self.log.info(
-            process_info['model'] + " is no longer being captured")
+        self.log.info("%s is no longer being captured", process_info['model'])
         if os.path.isfile(process_info['filename']):
             process_stats = self.get_process_stats(process_info)
             if process_stats['file_size'] == 0:
@@ -332,15 +343,12 @@ class Chaturbate(object):
                 os.remove(process_info['filename'])
             else:
                 self.move_to_complete(process_info)
-                message = ("Finished:" +
-                           process_info['model'] + " - " +
-                           "Started at " +
-                           process_stats['started_at'] + " | " +
-                           "Size:" +
-                           process_stats['formatted_file_size'] + " | " +
-                           "Duration:" +
-                           process_stats['recording_time'])
-                self.log.info(message)
+                self.log.info("Finished: %s - Started at %s | " +
+                              "Size: %s | Duration: %s",
+                              process_info['model'],
+                              process_stats['started_at'],
+                              process_stats['formatted_file_size'],
+                              process_stats['recording_time'])
 
     def is_running(self):
         """
@@ -361,7 +369,7 @@ class Chaturbate(object):
                         os.remove(process['source'])
                     else:
                         self.log.warning(
-                            "Something went wrong with ffmpeg, not deleting")
+                            "ffmpeg transcode failed, not deleting flv")
 
                 remove.append(process['id'])
 
@@ -392,8 +400,8 @@ class Chaturbate(object):
 
         result = self.request.post(url,
                                    data={
-                                       'username': self.username,
-                                       'password': self.password,
+                                       'username': self.config['username'],
+                                       'password': self.config['password'],
                                        'csrfmiddlewaretoken': csrf
                                    },
                                    cookies=result.cookies,
@@ -417,12 +425,8 @@ class Chaturbate(object):
         online_models = self.get_online_models()
         self.process_models(online_models)
         self.print_recording()
-        try:
-            if self.config.get('Debug', 'enable') == "true":
-                self.print_status()
-        except ConfigParser.NoSectionError:
-            pass
-
+        if self.config['debug'] == 'true':
+            self.print_status()
 
     def print_status(self):
         """
@@ -437,10 +441,8 @@ class Chaturbate(object):
             if process['type'] == 'ffmpeg':
                 processing = processing + 1
 
-        message = ("Capturing: " + str(capturing) +
-                   ", Processing: " + str(processing))
-
-        self.log.info(message)
+        self.log.info("Capturing: %d, Processing: %d",
+                      capturing, processing)
 
     def print_recording(self):
         """
@@ -449,29 +451,26 @@ class Chaturbate(object):
         for process in self.processes:
             if process['type'] == 'rtmpdump' and \
                     os.path.isfile(process['filename']):
-                proc_stats = self.get_process_stats(process)
-                if proc_stats['file_size'] > 0:
-                    message = ("Recording: " +
-                               process['model'] + " - " +
-                               "Duration: " +
-                               proc_stats['recording_time'] + " - " +
-                               "Size: " +
-                               proc_stats['formatted_file_size'])
-                    self.log.info(message)
+                process_stats = self.get_process_stats(process)
+                if process_stats['file_size'] > 0:
+                    self.log.info("Recording: %s - Duration: %s - Size: %s",
+                                  process['model'],
+                                  process_stats['recording_time'],
+                                  process_stats['formatted_file_size']
+                                 )
 
     def is_private(self, rtmp_info):
         """
         Checks if a stream is private.
 
-        Runs rtmpdump for 5 seconds and checks if the file size is > 0.
+        Runs rtmpdump for a few seconds and checks if the file size is > 0.
 
         :param list rtmp_info: A list with all the rtmp info.
 
-        :return: True if private, False otherwise.
         :rtype: bool
         """
         result = True
-        seconds = 5
+        seconds = 2
 
         file_name = "test.flv"
         proc = self.run_rtmpdump(
@@ -493,18 +492,13 @@ class Chaturbate(object):
 
         :param dict process: A dict with information about a rtmpdump process.
         """
-        directory = self.config.get('Directories', 'complete')
-
-        if os.path.isdir(directory) is False:
-            os.mkdir(directory)
-
         source = process['filename']
         flv = source.replace(
-            self.config.get('Directories', 'capturing') + os.sep,
-            self.config.get('Directories', 'complete') + os.sep)
+            self.config['capturing_path'] + os.sep,
+            self.config['completed_path'] + os.sep)
         os.rename(source, flv)
 
-        if self.config.get('FFmpeg', 'enable') == "true":
+        if self.config['ffmpeg'] == "true":
             mp4 = flv.replace(".flv", ".mp4")
             self.run_ffmpeg(process['model'], flv, mp4)
 
@@ -519,7 +513,7 @@ class Chaturbate(object):
         args = [
             ["nice", "-n", "19"],
             ['ffmpeg', '-i', source_fn],
-            self.config.get('FFmpeg', 'options').split(),
+            self.config['ffmpeg-flags'].split(),
             [destination_fn]
             ]
 
