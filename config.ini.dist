@@ -9,3 +9,6 @@ complete=Complete
 [FFmpeg]
 enable=false
 options=-c:v copy -c:a libfaac
+
+[Debug]
+enable=false

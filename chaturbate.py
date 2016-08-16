@@ -416,8 +416,13 @@ class Chaturbate(object):
         c.is_running()
         online_models = self.get_online_models()
         self.process_models(online_models)
-        # self.print_recording()
-        self.print_status()
+        self.print_recording()
+        try:
+            if self.config.get('Debug', 'enable') == "true":
+                self.print_status()
+        except ConfigParser.NoSectionError:
+            pass
+
 
     def print_status(self):
         """
