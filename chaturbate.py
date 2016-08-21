@@ -194,7 +194,8 @@ class Chaturbate(object):
         while request is None:
             try:
                 request = self.request.get(url)
-            except requests.exceptions.ConnectionError:
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.ChunkedEncodingError):
                 request = None
 
             while (request is not None) and \
@@ -203,7 +204,8 @@ class Chaturbate(object):
                 self.login()
                 try:
                     request = self.request.get(url)
-                except requests.exceptions.ConnectionError:
+                except (requests.exceptions.ConnectionError,
+                        requests.exceptions.ChunkedEncodingError):
                     request = None
 
         return request.text
