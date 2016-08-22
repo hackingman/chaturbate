@@ -109,7 +109,7 @@ class Chaturbate(object):
         if size == 0:
             return '0 B'
         i = 0
-        while size >= 1024 and i < len(suffixes)-1:
+        while size >= 1024 and i < len(suffixes) - 1:
             size /= 1024.
             i += 1
         f = ('%.2f' % size).rstrip('0').rstrip('.')
@@ -178,7 +178,7 @@ class Chaturbate(object):
                 "%H:%M", time.localtime(process_info['time'])),
             'recording_time': str(
                 timedelta(seconds=int(time.time()) - process_info['time']))
-            }
+        }
 
     def make_request(self, url):
         """
@@ -193,9 +193,10 @@ class Chaturbate(object):
 
         while request is None:
             try:
-                request = self.request.get(url)
+                request = self.request.get(url, timeout=5)
             except (requests.exceptions.ConnectionError,
-                    requests.exceptions.ChunkedEncodingError):
+                    requests.exceptions.ChunkedEncodingError,
+                    requests.exceptions.Timeout):
                 request = None
 
             while (request is not None) and \
@@ -203,9 +204,10 @@ class Chaturbate(object):
                 self.log.warning("Not logged in")
                 self.login()
                 try:
-                    request = self.request.get(url)
+                    request = self.request.get(url, timeout=5)
                 except (requests.exceptions.ConnectionError,
-                        requests.exceptions.ChunkedEncodingError):
+                        requests.exceptions.ChunkedEncodingError,
+                        requests.exceptions.Timeout):
                     request = None
 
         return request.text
@@ -328,7 +330,7 @@ class Chaturbate(object):
                 'model': flv_info[1],
                 'filename': filename,
                 'time': int(time.time()),
-                'proc': process,
+                'process': process,
             })
 
     def clean_rtmpdump(self, process_info):
@@ -363,11 +365,11 @@ class Chaturbate(object):
         # iterate over all "running" processes
         for process in self.processes:
             # if the process has stopped
-            if process['proc'].poll() is not None:
+            if process['process'].poll() is not None:
                 if process['type'] == 'rtmpdump':
                     self.clean_rtmpdump(process)
                 elif process['type'] == 'ffmpeg':
-                    if process['proc'].poll() == 0:
+                    if process['process'].poll() == 0:
                         os.remove(process['source'])
                     else:
                         self.log.warning(
@@ -386,8 +388,8 @@ class Chaturbate(object):
         Kills all child processes, used when ^C is pressed.
         """
         for process in self.processes:
-            if process['proc'].poll() is not None:
-                process['proc'].terminate()
+            if process['process'].poll() is not None:
+                process['process'].terminate()
 
     def login(self):
         """
@@ -439,9 +441,9 @@ class Chaturbate(object):
 
         for process in self.processes:
             if process['type'] == 'rtmpdump':
-                capturing = capturing + 1
+                capturing += 1
             if process['type'] == 'ffmpeg':
-                processing = processing + 1
+                processing += 1
 
         self.log.info("Capturing: %d, Processing: %d",
                       capturing, processing)
@@ -517,12 +519,13 @@ class Chaturbate(object):
             ['ffmpeg', '-i', source_fn],
             self.config['ffmpeg-flags'].split(),
             [destination_fn]
-            ]
+        ]
 
         args = [item for sublist in args for item in sublist]
 
         DEVNULL = open(os.devnull, 'wb')
-        proc = subprocess.Popen(args, stdout=DEVNULL, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(args, stdout=DEVNULL,
+                                   stderr=subprocess.STDOUT)
 
         self.processes.append(
             {
@@ -531,8 +534,9 @@ class Chaturbate(object):
                 'model': model_name,
                 'source': source_fn,
                 'destination': destination_fn,
-                'proc': proc,
+                'process': process,
             })
+
 
 if __name__ == "__main__":
     c = Chaturbate()
