@@ -90,29 +90,30 @@ class Chaturbate(object):
         self.config['capturing_path'] = config.get('Directories', 'capturing')
         self.config['completed_path'] = config.get('Directories', 'complete')
 
-        if os.path.isdir(self.config['capturing_path']) is False:
-            os.mkdir(self.config['capturing_path'])
-        if os.path.isdir(self.config['completed_path']) is False:
-            os.mkdir(self.config['completed_path'])
+        self.test_path(self.config['capturing_path'])
+        self.test_path(self.config['completed_path'])
 
-        filename = "permission.txt"
+    def test_path(self, path):
+        """
+        Tests if a path exists and if its possible to write to it.
 
-        filename_capturing = os.path.join(self.config['capturing_path'], filename)
+        :param path: Path to test.
+        """
+        if os.path.isdir(path) is False:
+            try:
+                os.mkdir(path)
+            except OSError:
+                self.log.error("Unable to create %s", path)
+                sys.exit(1)
+
+        filename = "test-perm.txt"
+        filename = os.path.join(path, filename)
         try:
-            file_handle = open(filename_capturing, 'w')
+            file_handle = open(filename, 'w')
             file_handle.close()
-            os.remove(filename_capturing)
+            os.remove(filename)
         except IOError:
-            self.log.error("Unable to write to %s", filename_capturing)
-            sys.exit(1)
-
-        filename_completed = os.path.join(self.config['completed_path'], filename)
-        try:
-            file_handle = open(filename_completed, 'w')
-            file_handle.close()
-            os.remove(filename_completed)
-        except IOError:
-            self.log.error("Unable to write to %s", filename_completed)
+            self.log.error("Unable to write to %s", filename)
             sys.exit(1)
 
     @staticmethod
