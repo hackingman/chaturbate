@@ -391,6 +391,8 @@ class Chaturbate(object):
                     self.clean_rtmpdump(process)
                 elif process['type'] == 'ffmpeg':
                     if process['process'].poll() == 0:
+                        if self.config['debug'] == 'true':
+                            self.log.info("Deleting %s", process['source'])
                         os.remove(process['source'])
                     else:
                         self.log.warning(
