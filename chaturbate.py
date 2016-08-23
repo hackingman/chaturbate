@@ -95,6 +95,26 @@ class Chaturbate(object):
         if os.path.isdir(self.config['completed_path']) is False:
             os.mkdir(self.config['completed_path'])
 
+        filename = "permission.txt"
+
+        filename_capturing = os.path.join(self.config['capturing_path'], filename)
+        try:
+            file_handle = open(filename_capturing, 'w')
+            file_handle.close()
+            os.remove(filename_capturing)
+        except IOError:
+            self.log.error("Unable to write to %s", filename_capturing)
+            sys.exit(1)
+
+        filename_completed = os.path.join(self.config['completed_path'], filename)
+        try:
+            file_handle = open(filename_completed, 'w')
+            file_handle.close()
+            os.remove(filename_completed)
+        except IOError:
+            self.log.error("Unable to write to %s", filename_completed)
+            sys.exit(1)
+
     @staticmethod
     def get_human_size(size):
         """
@@ -476,15 +496,18 @@ class Chaturbate(object):
         result = True
         seconds = 2
 
-        file_name = "test.flv"
-        proc = self.run_rtmpdump(
-            rtmp_info, file_name, extra_argument="-B " + str(seconds))
-        proc.wait()
+        date_time = datetime.now()
+        filename = ("test-" + rtmp_info[1] +
+                    date_time.strftime("_%Y-%m-%dT%H%M%S") + ".flv")
+        filename = os.path.join(self.config['capturing_path'], filename)
+        process = self.run_rtmpdump(
+            rtmp_info, filename, extra_argument="-B " + str(seconds))
+        process.wait()
 
-        if os.path.isfile(file_name):
-            if os.path.getsize(file_name) > 0:
+        if os.path.isfile(filename):
+            if os.path.getsize(filename) > 0:
                 result = False
-            os.remove(file_name)
+            os.remove(filename)
 
         return result
 
