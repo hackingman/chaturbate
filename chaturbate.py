@@ -50,6 +50,8 @@ class Chaturbate(object):
         """
         Configures logging, reads configuration
         """
+        self.detect_rtmpdump()
+
         # create a requests object with sessions
         self.request = requests.Session()
 
@@ -117,6 +119,24 @@ class Chaturbate(object):
             sys.exit(1)
 
     @staticmethod
+    def detect_rtmpdump():
+        """
+        Checks if rtmpdump-ksv is installed
+
+        :rtype: bool
+        """
+        arguments = [
+            "rtmpdump",
+            "--help",
+        ]
+
+        output = subprocess.check_output(arguments, stderr=subprocess.STDOUT)
+
+        if '--weeb' not in output:
+            sys.exit("rtmpdump-ksv not detected")
+
+
+    @staticmethod
     def get_human_size(size):
         """
         Returns file size in a human readable format.
@@ -172,7 +192,7 @@ class Chaturbate(object):
             "--pageUrl", "http://chaturbate.com/" + flv_info[1],
             "--conn", "S:" + flv_info[8],
             "--conn", "S:" + flv_info[1],
-            "--conn", "S:2.645",
+            "--conn", "S:2.649",
             "--conn", "S:" + urllib.unquote(flv_info[15]),
             "--token", "m9z#$dO0qe34Rxe@sMYxx",
             "--playpath", "playpath",
@@ -540,17 +560,20 @@ class Chaturbate(object):
         :param str source_fn: Source file, normally the flv file.
         :param str destination_fn: Destination file, normally a mp4.
         """
-        args = [
+        arguments = [
             ["nice", "-n", "19"],
             ['ffmpeg', '-i', source_fn],
             self.config['ffmpeg-flags'].split(),
             [destination_fn]
         ]
 
-        args = [item for sublist in args for item in sublist]
+        arguments = [item for sublist in arguments for item in sublist]
+
+        if self.config['debug'] == 'true':
+            self.log.info("Running: %s", ' '.join(arguments))
 
         DEVNULL = open(os.devnull, 'wb')
-        process = subprocess.Popen(args, stdout=DEVNULL,
+        process = subprocess.Popen(arguments, stdout=DEVNULL,
                                    stderr=subprocess.STDOUT)
 
         self.processes.append(
