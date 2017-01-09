@@ -12,13 +12,18 @@ The requirements are:
  * requests - http://docs.python-requests.org/en/master/
 """
 
+import sys
+if sys.version_info[0] < 3:
+    import ConfigParser
+else:
+    import configparser
+
 import subprocess
 import re
 import urllib
 import time
-import ConfigParser
 import os
-import sys
+import json
 from datetime import datetime, timedelta
 import logging
 import requests
@@ -74,7 +79,11 @@ class Chaturbate(object):
             self.log.error("%s not found", config_fn)
             sys.exit()
 
-        config = ConfigParser.ConfigParser()
+        if sys.version_info[0] < 3:
+            config = ConfigParser.ConfigParser()
+        else:
+            config = configparser.ConfigParser()
+
         config.read(config_fn)
 
         self.config['username'] = config.get('User', 'username')
@@ -132,7 +141,7 @@ class Chaturbate(object):
 
         output = subprocess.check_output(arguments, stderr=subprocess.STDOUT)
 
-        if '--weeb' not in output:
+        if b'--weeb' not in output:
             sys.exit("rtmpdump-ksv not detected")
 
 
@@ -183,6 +192,11 @@ class Chaturbate(object):
         :return: A Popen object (process).
         :rtype: Popen
         """
+        if sys.version_info[0] < 3:
+            unquote = urllib.unquote(flv_info[15])
+        else:
+            unquote = urllib.parse.unquote(flv_info[15])
+
         arguments = [
             "rtmpdump",
             "--quiet",
@@ -193,7 +207,7 @@ class Chaturbate(object):
             "--conn", "S:" + flv_info[8],
             "--conn", "S:" + flv_info[1],
             "--conn", "S:2.649",
-            "--conn", "S:" + urllib.unquote(flv_info[15]),
+            "--conn", "S:" + unquote,
             "--token", "m9z#$dO0qe34Rxe@sMYxx",
             "--playpath", "playpath",
             "--flv", output_filename
@@ -232,9 +246,15 @@ class Chaturbate(object):
         """
         request = None
 
+        if os.path.isfile('cookie.txt'):
+            with open('cookie.txt','r') as f:
+                cookie = requests.utils.cookiejar_from_dict(json.load(f))
+        else:
+            cookie = {}
+
         while request is None:
             try:
-                request = self.request.get(url, timeout=5)
+                request = self.request.get(url, timeout=5, cookies=cookie)
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.ChunkedEncodingError,
                     requests.exceptions.Timeout):
@@ -245,7 +265,7 @@ class Chaturbate(object):
                 self.log.warning("Not logged in")
                 self.login()
                 try:
-                    request = self.request.get(url, timeout=5)
+                    request = self.request.get(url, timeout=5, cookies=cookie)
                 except (requests.exceptions.ConnectionError,
                         requests.exceptions.ChunkedEncodingError,
                         requests.exceptions.Timeout):
@@ -439,25 +459,41 @@ class Chaturbate(object):
         Performs the login on the site.
         """
         self.log.info("Logging in...")
-        url = 'https://chaturbate.com/auth/login/'
+        url = 'https://chaturbate.com/'
         result = self.request.get(url)
 
         soup = BeautifulSoup(result.text, "html.parser")
+
+        if soup.find('div', {'class': 'g-recaptcha'}):
+            sys.exit("captcha found, bailing")
+        else:
+            self.log.info("No captcha found!!")
+
         csrf = soup.find('input', {'name': 'csrfmiddlewaretoken'}).get('value')
+
+        url = 'https://chaturbate.com/auth/login/?next=/'
 
         result = self.request.post(url,
                                    data={
+                                       'csrfmiddlewaretoken': csrf,
                                        'username': self.config['username'],
                                        'password': self.config['password'],
-                                       'csrfmiddlewaretoken': csrf
+                                       'rememberme': 'on',
+                                       'next': '/',
                                    },
                                    cookies=result.cookies,
-                                   headers={'Referer': url})
+                                   headers={
+                                        'user-agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
+                                        'Referer': url
+                                   })
 
         if self.is_logged(result.text) is False:
             self.log.warning("Could not login")
+            sys.exit("BYE!")
             return False
         else:
+            with open('cookie.txt','w') as f:
+                json.dump(requests.utils.dict_from_cookiejar(result.cookies), f)
             return True
 
     def do_cycle(self):
