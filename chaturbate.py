@@ -12,17 +12,19 @@ The requirements are:
  * requests - http://docs.python-requests.org/en/master/
 """
 
+import os
 import sys
 if sys.version_info[0] < 3:
     import ConfigParser
+    DEVNULL = open(os.devnull, 'wb')
 else:
     import configparser
+    from subprocess import DEVNULL
 
 import subprocess
 import re
 import urllib
 import time
-import os
 import json
 from datetime import datetime, timedelta
 import logging
@@ -34,6 +36,9 @@ class Chaturbate(object):
     """
     Script to record Chaturbate streams.
     """
+    agent = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36' \
+                 '(KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36'
+    """User agent to be used in the requests."""
     processes = []
     """A list with all the processes."""
     request = None
@@ -247,7 +252,7 @@ class Chaturbate(object):
         request = None
 
         if os.path.isfile('cookie.txt'):
-            with open('cookie.txt','r') as f:
+            with open('cookie.txt', 'r') as f:
                 cookie = requests.utils.cookiejar_from_dict(json.load(f))
         else:
             cookie = {}
@@ -483,8 +488,8 @@ class Chaturbate(object):
                                    },
                                    cookies=result.cookies,
                                    headers={
-                                        'user-agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 Safari/537.36',
-                                        'Referer': url
+                                       'user-agent': self.agent,
+                                       'Referer': url
                                    })
 
         if self.is_logged(result.text) is False:
@@ -492,7 +497,7 @@ class Chaturbate(object):
             sys.exit("BYE!")
             return False
         else:
-            with open('cookie.txt','w') as f:
+            with open('cookie.txt', 'w') as f:
                 json.dump(requests.utils.dict_from_cookiejar(result.cookies), f)
             return True
 
@@ -597,9 +602,9 @@ class Chaturbate(object):
         :param str destination_fn: Destination file, normally a mp4.
         """
         arguments = [
-            ['ffmpeg', '-threads', '1', '-i', source_fn],
+            ['ffmpeg', '-y', '-threads', '1', '-i', source_fn],
             self.config['ffmpeg-flags'].split(),
-            [destination_fn]
+            [destination_fn],
         ]
 
         arguments = [item for sublist in arguments for item in sublist]
@@ -607,9 +612,8 @@ class Chaturbate(object):
         if self.config['debug'] == 'true':
             self.log.info("Running: %s", ' '.join(arguments))
 
-        DEVNULL = open(os.devnull, 'wb')
         process = subprocess.Popen(arguments, stdout=DEVNULL,
-                                   stderr=subprocess.STDOUT)
+                                   stderr=DEVNULL)
 
         self.processes.append(
             {
