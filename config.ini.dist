@@ -8,7 +8,7 @@ complete=Complete
 
 [FFmpeg]
 enable=false
-options=-c:v copy -c:a libfaac
+options=-c:v copy -c:a aac
 
 [Debug]
 enable=false
