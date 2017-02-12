@@ -602,7 +602,7 @@ class Chaturbate(object):
         :param str destination_fn: Destination file, normally a mp4.
         """
         arguments = [
-            ['ffmpeg', '-y', '-threads', '1', '-i', source_fn],
+            ['ffmpeg', '-nostats', '-loglevel', '0', '-y', '-threads', '1', '-i', source_fn],
             self.config['ffmpeg-flags'].split(),
             [destination_fn],
         ]
