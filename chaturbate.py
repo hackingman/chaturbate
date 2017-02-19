@@ -602,7 +602,7 @@ class Chaturbate(object):
         :param str destination_fn: Destination file, normally a mp4.
         """
         arguments = [
-            ['ffmpeg', '-nostats', '-loglevel', '-8', '-y', '-threads', '1', '-i', source_fn],
+            ['ffmpeg', '-nostats', '-loglevel', '-8', '-y', '-threads', '2', '-i', source_fn],
             self.config['ffmpeg-flags'].split(),
             [destination_fn],
         ]
@@ -612,8 +612,7 @@ class Chaturbate(object):
         if self.config['debug'] == 'true':
             self.log.info("Running: %s", ' '.join(arguments))
 
-        process = subprocess.Popen(arguments, stdout=DEVNULL,
-                                   stderr=DEVNULL)
+        process = subprocess.Popen(arguments)
 
         self.processes.append(
             {
